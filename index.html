@@ -512,7 +512,11 @@ function drawVan(ctx, config){
       ctx.save(); ctx.translate(pos[i], 0); drawAccessory(ctx, id, aw, ah); ctx.restore(); }
   }
 }
-function maxFuelFor(config){ return config && config.extra === "fuel" ? 160 : 100; }
+function maxFuelFor(config){
+  let m = config && config.extra === "fuel" ? 160 : 100;
+  if (config && config.roof) for (const a of config.roof) if (a === "fuelcan") m += 40;   // each roof fuel can adds +40
+  return m;
+}
 // consumption multiplier by vehicle: short 1x, long 1.1x, bus 1.25x
 function fuelFactor(config){ const l = config && config.length; return l === "bus" ? 1.25 : l === "long" ? 1.1 : 1; }
 
@@ -522,11 +526,12 @@ const ACCESSORIES = [
   { id:"none",     name:"Empty" },
   { id:"rack",     name:"Roof rack" },
   { id:"cargo",    name:"Cargo box" },
-  { id:"fuelcan",  name:"Fuel can" },
+  { id:"fuelcan",  name:"Fuel can (+40 fuel)" },
   { id:"lightbar", name:"Light bar" },
   { id:"kayak",    name:"Kayak" },
   { id:"crate",    name:"Supply crate" },
   { id:"spare",    name:"Spare tire" },
+  { id:"solar",    name:"Solar panel" },
 ];
 function roofSlotPositions(config){
   const L = vanLength(config), n = roofSlots(config);
@@ -563,6 +568,12 @@ function drawAccessory(ctx, id, w, h){
     const r = Math.min(w,h)*0.42;
     ctx.fillStyle="#141414"; ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.fill();
     ctx.fillStyle="#4d4d4d"; ctx.beginPath(); ctx.arc(0,0,r*0.4,0,7); ctx.fill();
+  } else if (id === "solar"){
+    ctx.fillStyle="#1b2a55"; roundRect(ctx,-w*0.44,-h*0.4,w*0.88,h*0.8,2); ctx.fill();
+    ctx.strokeStyle="#3a5aa8"; ctx.lineWidth=1;
+    for (let i=1;i<3;i++){ const gx=-w*0.44 + w*0.88*i/3; ctx.beginPath(); ctx.moveTo(gx,-h*0.4); ctx.lineTo(gx,h*0.4); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(-w*0.44,0); ctx.lineTo(w*0.44,0); ctx.stroke();
+    ctx.strokeStyle="#4a6fc8"; ctx.lineWidth=1.5; ctx.strokeRect(-w*0.44,-h*0.4,w*0.88,h*0.8);
   }
 }
 
@@ -665,6 +676,27 @@ const rings = [];                      // honk rings
 const floaters = [];                   // "+N" coin popups
 let playing = false;
 let clock = 0;
+
+/* day/night cycle: 5 min day + 5 min night (synced across players via wall clock) */
+const DAYNIGHT_MS = 600000;
+function nightAmount(){                                   // 0 = full day, 1 = full night
+  const t = (Date.now() % DAYNIGHT_MS) / DAYNIGHT_MS;     // 0..1, day in the first half
+  const e = 0.05;                                         // dawn/dusk half-width (symmetric)
+  if (t < e)         return 0.5 - (t/e)*0.5;              // dawn (2nd half): 0.5 -> 0
+  if (t < 0.5 - e)   return 0;                            // day
+  if (t < 0.5 + e)   return (t - (0.5 - e)) / (2*e);      // dusk: 0 -> 1
+  if (t < 1.0 - e)   return 1;                            // night
+  return 1 - ((t - (1.0 - e)) / e) * 0.5;                 // dawn (1st half): 1 -> 0.5
+}
+function drawTimeOfDay(){
+  const nite = nightAmount() > 0.5;
+  const label = nite ? "☾ Night" : "☀ Day";
+  ctx.font = "700 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  const w = ctx.measureText(label).width + 24, x = VW/2, y = 22;
+  ctx.fillStyle = "rgba(10,15,22,0.72)"; roundRect(ctx, x-w/2, y-13, w, 26, 13); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = nite ? "#b9c6ff" : "#ffd98a"; ctx.fillText(label, x, y+1);
+}
 
 // Fog of war
 const FOG = 120;
@@ -1377,10 +1409,15 @@ function render(){
 
   ctx.restore();
 
+  // night tint over the world (HUD drawn after stays bright)
+  const night = nightAmount();
+  if (night > 0.001){ ctx.fillStyle = "rgba(12,18,48," + (0.55*night).toFixed(3) + ")"; ctx.fillRect(0,0,VW,VH); }
+
   drawMinimap();
   if (self.refueling) prompt("⛽ Refueling…", "#52c46a");
   else if (self.atStation && self.fuel<self.maxFuel) prompt(self.fuelMsg ? "⛽ "+self.fuelMsg : "⛽ Hold F to fuel — 25 coins", self.fuelMsg ? "#ff8b5b" : "#ffb03a");
   drawStats();
+  drawTimeOfDay();
   if (touchMode) updateTouchButtons();
 }
 
