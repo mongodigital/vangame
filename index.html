@@ -142,6 +142,9 @@
         <label class="field"><span>Pack in the back</span>
           <div class="toggle" id="extraToggle">
             <button data-v="spare" class="on">Spare tire</button><button data-v="fuel">Extra fuel</button></div></label>
+        <label class="field"><span>Propulsion</span>
+          <div class="toggle" id="propToggle">
+            <button data-v="fuel" class="on">Fuel</button><button data-v="hybrid">Hybrid</button><button data-v="electric">Electric</button></div></label>
       </div>
       <div>
         <div class="preview-wrap">
@@ -513,10 +516,15 @@ function drawVan(ctx, config){
   }
 }
 function maxFuelFor(config){
-  let m = config && config.extra === "fuel" ? 160 : 100;
+  const prop = (config && config.propulsion) || "fuel";
+  if (prop === "electric") return 0;                        // electric has no fuel tank
+  let m = prop === "hybrid" ? 50 : 100;                     // hybrid comes with a 50-unit tank
+  if (config && config.extra === "fuel") m += 60;
   if (config && config.roof) for (const a of config.roof) if (a === "fuelcan") m += 40;   // each roof fuel can adds +40
   return m;
 }
+function maxBatteryFor(config){ const p = (config && config.propulsion) || "fuel"; return (p === "hybrid" || p === "electric") ? 10 : 0; }
+function solarPanelsFor(config){ let n = 0; if (config && config.roof) for (const a of config.roof) if (a === "solar") n++; return n; }
 // consumption multiplier by vehicle: short 1x, long 1.1x, bus 1.25x
 function fuelFactor(config){ const l = config && config.length; return l === "bus" ? 1.25 : l === "long" ? 1.1 : 1; }
 
@@ -586,7 +594,7 @@ const roomInput = document.getElementById("roomInput");
 const startBtn = document.getElementById("startBtn");
 const lobbyErr = document.getElementById("lobbyErr");
 const shareHint = document.getElementById("shareHint");
-const config = { color: PALETTE[5], length:"short", rearTires:"4x4", extra:"spare", roof:["none"] };
+const config = { color: PALETTE[5], length:"short", rearTires:"4x4", extra:"spare", roof:["none"], propulsion:"fuel" };
 
 const swatchWrap = document.getElementById("swatches");
 PALETTE.forEach(c => {
@@ -607,7 +615,7 @@ function wireToggle(id, key){
     btn.onclick = () => { grp.querySelectorAll("button").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); config[key] = btn.dataset.v; if (key==="length") syncRoofSlots(); drawPreview(); };
   });
 }
-wireToggle("lengthToggle","length"); wireToggle("tiresToggle","rearTires"); wireToggle("extraToggle","extra");
+wireToggle("lengthToggle","length"); wireToggle("tiresToggle","rearTires"); wireToggle("extraToggle","extra"); wireToggle("propToggle","propulsion");
 
 /* roof-accessory garage: one selector per slot; slot count follows the vehicle */
 function renderRoofSlots(){
@@ -677,22 +685,26 @@ const floaters = [];                   // "+N" coin popups
 let playing = false;
 let clock = 0;
 
-/* day/night cycle: 5 min day + 5 min night (synced across players via wall clock) */
-const DAYNIGHT_MS = 600000;
+/* day/night: a full 24-hour clock at 1 real minute per in-game hour (24-min cycle),
+   with summer-solstice daylight (sunrise 05:30, sunset 20:30 ≈ 15h day / 9h night).
+   Time comes from the shared wall clock, so every player sees the same time of day. */
+const MIN_PER_HOUR = 60000;                              // 1 in-game hour = 1 real minute
+const SUNRISE = 5.5, SUNSET = 20.5, TWILIGHT = 0.75;     // in-game hours
+function inGameHour(){ return (Date.now() / MIN_PER_HOUR) % 24; }   // 0..24
 function nightAmount(){                                   // 0 = full day, 1 = full night
-  const t = (Date.now() % DAYNIGHT_MS) / DAYNIGHT_MS;     // 0..1, day in the first half
-  const e = 0.05;                                         // dawn/dusk half-width (symmetric)
-  if (t < e)         return 0.5 - (t/e)*0.5;              // dawn (2nd half): 0.5 -> 0
-  if (t < 0.5 - e)   return 0;                            // day
-  if (t < 0.5 + e)   return (t - (0.5 - e)) / (2*e);      // dusk: 0 -> 1
-  if (t < 1.0 - e)   return 1;                            // night
-  return 1 - ((t - (1.0 - e)) / e) * 0.5;                 // dawn (1st half): 1 -> 0.5
+  const h = inGameHour(), tw = TWILIGHT;
+  if (h < SUNRISE - tw) return 1;                                    // deep night
+  if (h < SUNRISE + tw) return 1 - (h - (SUNRISE - tw)) / (2*tw);    // dawn 1->0
+  if (h < SUNSET  - tw) return 0;                                    // day
+  if (h < SUNSET  + tw) return (h - (SUNSET - tw)) / (2*tw);         // dusk 0->1
+  return 1;                                                          // night
 }
 function drawTimeOfDay(){
+  const h = inGameHour(), hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
   const nite = nightAmount() > 0.5;
-  const label = nite ? "☾ Night" : "☀ Day";
+  const label = (nite ? "☾ " : "☀ ") + String(hh).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
   ctx.font = "700 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
-  const w = ctx.measureText(label).width + 24, x = VW/2, y = 22;
+  const w = ctx.measureText(label).width + 26, x = VW/2, y = 22;
   ctx.fillStyle = "rgba(10,15,22,0.72)"; roundRect(ctx, x-w/2, y-13, w, 26, 13); ctx.fill();
   ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.stroke();
   ctx.fillStyle = nite ? "#b9c6ff" : "#ffd98a"; ctx.fillText(label, x, y+1);
@@ -877,6 +889,8 @@ startBtn.onclick = () => {
     id:null, name, config:{...config},
     x: SPAWN.x + (Math.random()*60-30), y: SPAWN.y + (Math.random()*40-20),
     angle: 0, speed: 0, fuel: maxFuelFor(config), maxFuel: maxFuelFor(config),
+    propulsion: config.propulsion, battery: maxBatteryFor(config), maxBattery: maxBatteryFor(config),
+    solarPanels: solarPanelsFor(config), solarAccum: 0, solarCharging: false, batteryPulseT: 99,
     coins: 100, refueling:false, atStation:false, fuelSession:false, fuelMsg:"",
     tHold:0, tConsumed:false, fuelHold:false, throttleHold:0, cruise:false,
     waypoints:[], reverseTarget:null, hitchIntent:null, stuckT:0,
@@ -1053,7 +1067,7 @@ function applyIncoming(m){
   if (m.type === "full"){ showFull(); return; }
   if (m.type === "player"){ if (m.player.id !== self.id) upsertRemote(m.player); return; }
   if (m.type === "state"){ const r = remotes.get(m.id); if (!r) return;
-    r.x=m.x; r.y=m.y; r.angle=m.angle; r.speed=m.speed; r.fuel=m.fuel; if (typeof m.coins==="number") r.coins=m.coins; return; }
+    r.x=m.x; r.y=m.y; r.angle=m.angle; r.speed=m.speed; r.fuel=m.fuel; if (typeof m.battery==="number") r.battery=m.battery; if (typeof m.coins==="number") r.coins=m.coins; return; }
   if (m.type === "honk"){ const r = remotes.get(m.id); if (r){ rings.push({x:r.x,y:r.y,t:0}); playMariachi(); } return; }
   if (m.type === "taken"){ applyTaken(m); return; }
   if (m.type === "coinRespawn"){ applyCoinRespawn(m); return; }
@@ -1069,6 +1083,7 @@ function upsertRemote(p){
   if (!r){ r = { rx:p.x, ry:p.y, rangle:p.angle }; remotes.set(p.id, r); }
   r.id=p.id; r.name=p.name; r.config=p.config||{}; r.x=p.x; r.y=p.y; r.angle=p.angle;
   r.speed=p.speed||0; r.fuel=p.fuel ?? 100; r.coins=p.coins ?? 0; r.maxFuel=maxFuelFor(r.config);
+  r.propulsion=(r.config&&r.config.propulsion)||"fuel"; r.battery=p.battery ?? 0; r.maxBattery=maxBatteryFor(r.config);
   refreshPlayerList();
 }
 function showFull(){ document.getElementById("fullMsg").style.display="flex"; try { if (net.peer) net.peer.destroy(); } catch {} }
@@ -1136,7 +1151,7 @@ function loop(now){
   const f = dt*60;
   update(dt, f); processCoinRespawns(); render();
   sendAcc += dt;
-  if (sendAcc >= 0.06){ sendAcc = 0; net.sendState({ x:self.x, y:self.y, angle:self.angle, speed:self.speed, fuel:self.fuel, coins:self.coins }); }
+  if (sendAcc >= 0.06){ sendAcc = 0; net.sendState({ x:self.x, y:self.y, angle:self.angle, speed:self.speed, fuel:self.fuel, battery:self.battery, coins:self.coins }); }
   requestAnimationFrame(loop);
 }
 
@@ -1186,11 +1201,15 @@ function update(dt, f){
   if (kT !== 0 || kS !== 0){ s.waypoints.length=0; s.reverseTarget=null; s.hitchIntent=null; s.stuckT=0; }  // manual overrides autopilot
   else if (s.reverseTarget){ const a=autoReverse(s); throttle=a.throttle; steer=a.steer; }
   else if (s.waypoints.length){ const a=autoForward(s, dt); throttle=a.throttle; steer=a.steer; }
-  const hasFuel = s.fuel > 0;
-  const boosting = s.boost && throttle > 0 && hasFuel;   // double-tap-hold accelerator
+  const prop = s.propulsion;
+  const hasEnergy = prop === "electric" ? (s.battery > 0) : (s.fuel > 0);   // what powers the wheels
+  const boosting = s.boost && throttle > 0 && hasEnergy;                     // double-tap-hold accelerator
   s.boosting = boosting;
-  const MAXSPD = 4.6 * (boosting ? 1.25 : 1);             // 25% faster top speed
-  const accel = hasFuel ? (0.16 * (boosting ? 1.25 : 1)) : 0;
+  // per-propulsion boost top speed (mph = speed*11): fuel boost is 4.6*1.25, hybrid +5mph, electric +20mph
+  const FBOOST = 4.6 * 1.25;
+  const boostTop = prop === "electric" ? FBOOST + 20/11 : prop === "hybrid" ? FBOOST + 5/11 : FBOOST;
+  const MAXSPD = boosting ? boostTop : 4.6;
+  const accel = hasEnergy ? (boosting ? MAXSPD*0.045 : 0.16) : 0;
   if (throttle > 0) s.speed += accel*throttle*f;
   else if (throttle < 0) s.speed += 0.12*throttle*f;
   s.speed *= Math.pow(0.965, f);
@@ -1203,16 +1222,36 @@ function update(dt, f){
   const vx = Math.cos(s.angle)*s.speed*f, vy = Math.sin(s.angle)*s.speed*f;
   if (!blocked(s.x+vx, s.y)) s.x += vx; else s.speed *= 0.35;
   if (!blocked(s.x, s.y+vy)) s.y += vy; else s.speed *= 0.35;
-  // sustained forward throttle (>1s) burns 25% less; consumption scales by vehicle
+  // sustained forward throttle (>1s) is 25% more efficient; boost is less efficient (per propulsion)
   if (throttle > 0) s.throttleHold += dt; else s.throttleHold = 0;
   s.cruise = s.throttleHold > 1;
-  if (throttle !== 0 && hasFuel){
+  if (throttle !== 0 && hasEnergy){
     let mult = fuelFactor(s.config);
-    if (boosting) mult *= 1.25;          // boost: 25% MORE fuel (overrides the cruise discount)
-    else if (s.cruise) mult *= 0.75;     // cruise: 25% less fuel
-    const burn = (Math.abs(s.speed)*0.006*f + 0.004*f) * mult;
-    s.fuel = Math.max(0, s.fuel - burn);
+    const boostConsum = prop === "electric" ? 1.25*1.15 : prop === "hybrid" ? 1.25*1.10 : 1.25;   // boost efficiency
+    if (boosting) mult *= boostConsum;
+    else if (s.cruise) mult *= 0.75;
+    const stdBurn = (Math.abs(s.speed)*0.006*f + 0.004*f) * mult;   // an equivalent fuel vehicle's burn
+    if (prop === "fuel"){
+      s.fuel = Math.max(0, s.fuel - stdBurn);
+    } else if (prop === "hybrid"){
+      s.fuel = Math.max(0, s.fuel - stdBurn*0.5);                   // half the fuel of a fuel vehicle
+      s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20);        // 1 electricity per 20 fuel used
+    } else { // electric
+      s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20);        // same drain rate as a hybrid
+    }
   }
+  // ---- solar charging: 1 energy per in-game daylight hour per panel (hybrid/electric) ----
+  s.solarCharging = false;
+  if (s.maxBattery > 0 && s.solarPanels > 0 && s.battery < s.maxBattery){
+    const daylight = 1 - nightAmount();                            // 0 at night .. 1 full day
+    if (daylight > 0.02){
+      const gain = s.solarPanels * daylight * (dt / (MIN_PER_HOUR/1000));   // 60 real s == 1 in-game hour
+      s.battery = Math.min(s.maxBattery, s.battery + gain);
+      s.solarAccum += gain; s.solarCharging = true;
+      if (s.solarAccum >= 1){ s.solarAccum -= 1; s.batteryPulseT = 0; }     // trigger a "+1" pop on the bar
+    }
+  }
+  if (s.batteryPulseT < 2) s.batteryPulseT += dt;
 
   // ---- fuel stations: hold F, 25 coins per fill session ----
   let atStation = false;
@@ -1251,7 +1290,12 @@ function update(dt, f){
     }
   }
 
-  document.getElementById("warn").style.display = (s.fuel<=0 && Math.abs(s.speed)<0.2) ? "block" : "none";
+  const warnEl = document.getElementById("warn");
+  const dead = s.propulsion === "electric" ? (s.battery <= 0) : (s.fuel <= 0);
+  if (dead && Math.abs(s.speed) < 0.2){
+    warnEl.textContent = s.propulsion === "electric" ? "BATTERY DEAD — sit in the sun with a solar panel ☀" : "OUT OF FUEL — grab coins & get to a ⛽";
+    warnEl.style.display = "block";
+  } else warnEl.style.display = "none";
   reveal(s.x, s.y);
 
   // remotes easing
@@ -1379,7 +1423,7 @@ function render(){
   for (const tr of trailers){ if (!vis(tr.tx,tr.ty,60)) continue; drawTrailer(tr); }
 
   // vans (remotes then self)
-  for (const r of remotes.values()) drawWorldVan(r.rx, r.ry, r.rangle, r.config||{}, r.name, r.fuel, maxFuelFor(r.config||{}), false);
+  for (const r of remotes.values()) drawWorldVan(r.rx, r.ry, r.rangle, r.config||{}, r.name, r.fuel, maxFuelFor(r.config||{}), r.battery, maxBatteryFor(r.config||{}), false);
   if (self.boosting){                                  // speed streaks behind the van
     ctx.strokeStyle = "rgba(255,150,80,0.5)"; ctx.lineWidth = 3; ctx.lineCap = "round";
     const bx = self.x - Math.cos(self.angle)*24, by = self.y - Math.sin(self.angle)*24;
@@ -1387,7 +1431,7 @@ function render(){
       ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - Math.cos(self.angle)*12, py - Math.sin(self.angle)*12); ctx.stroke(); }
     ctx.lineCap = "butt";
   }
-  drawWorldVan(self.x, self.y, self.angle, self.config, self.name, self.fuel, self.maxFuel, true);
+  drawWorldVan(self.x, self.y, self.angle, self.config, self.name, self.fuel, self.maxFuel, self.battery, self.maxBattery, true);
 
   // route markers (tap-to-drive)
   if (self.waypoints.length){
@@ -1421,15 +1465,20 @@ function render(){
   if (touchMode) updateTouchButtons();
 }
 
-function drawWorldVan(x,y,angle,config,name,fuel,maxFuel,isSelf){
+function drawWorldVan(x,y,angle,config,name,fuel,maxFuel,battery,maxBattery,isSelf){
   ctx.save(); ctx.translate(x,y); ctx.rotate(angle); drawVan(ctx, config); ctx.restore();
   ctx.textAlign="center"; ctx.textBaseline="alphabetic"; ctx.font="600 12px system-ui";
   const top = y - 34;
   ctx.fillStyle="rgba(0,0,0,0.45)"; const tw=ctx.measureText(name||"Traveler").width+12; roundRect(ctx, x-tw/2, top-14, tw, 16, 6); ctx.fill();
   ctx.fillStyle = isSelf ? "#ffe08a" : "#eef2f6"; ctx.fillText(name||"Traveler", x, top-2);
-  const bw=34, bh=5, ratio=clamp((fuel||0)/(maxFuel||100),0,1);
+  // energy bar: electric shows battery, others show fuel
+  const prop = (config && config.propulsion) || "fuel";
+  let ratio, col;
+  if (prop === "electric"){ ratio = clamp((battery||0)/(maxBattery||10),0,1); col = ratio>0.5?"#4fd1c5":ratio>0.2?"#f1c40f":"#ff6b5b"; }
+  else { ratio = clamp((fuel||0)/(maxFuel||100),0,1); col = ratio>0.5?"#52c46a":ratio>0.2?"#f1c40f":"#ff6b5b"; }
+  const bw=34, bh=5;
   ctx.fillStyle="rgba(0,0,0,0.5)"; roundRect(ctx, x-bw/2, top+4, bw, bh, 3); ctx.fill();
-  ctx.fillStyle = ratio>0.5?"#52c46a":ratio>0.2?"#f1c40f":"#ff6b5b"; roundRect(ctx, x-bw/2, top+4, bw*ratio, bh, 3); ctx.fill();
+  ctx.fillStyle = col; roundRect(ctx, x-bw/2, top+4, bw*ratio, bh, 3); ctx.fill();
 }
 
 function drawTrailer(tr){
@@ -1494,9 +1543,11 @@ function drawMinimap(){
 function drawStats(){
   ctx.textAlign="left"; ctx.textBaseline="alphabetic";
   const x0 = 16, w = 210;
-  // panel
-  const y0 = VH - 118;
-  ctx.fillStyle="rgba(10,15,22,0.82)"; roundRect(ctx, x0-8, y0-8, w+16, 118, 12); ctx.fill();
+  const hasFuelBar = self.maxFuel > 0, hasBatBar = self.maxBattery > 0;
+  const nBars = (hasFuelBar?1:0) + (hasBatBar?1:0);
+  const panelH = 74 + nBars*30;
+  const y0 = VH - panelH;
+  ctx.fillStyle="rgba(10,15,22,0.82)"; roundRect(ctx, x0-8, y0-8, w+16, panelH+2, 12); ctx.fill();
   // coins
   ctx.fillStyle="#ffd23f"; ctx.beginPath(); ctx.arc(x0+8, y0+10, 8, 0, 7); ctx.fill();
   ctx.fillStyle="#c99a17"; ctx.font="700 10px system-ui"; ctx.textAlign="center"; ctx.fillText("$", x0+8, y0+13.5);
@@ -1506,18 +1557,45 @@ function drawStats(){
   ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText("SPEED", x0, y0+40);
   ctx.fillStyle="#eef2f6"; ctx.font="700 20px system-ui"; ctx.fillText(mph, x0+2, y0+62);
   ctx.fillStyle="#8496a6"; ctx.font="600 11px system-ui"; ctx.fillText("mph", x0+ (mph>=10?36:24), y0+62);
-  // little speed bar
   const sbx=x0+72, sbw=w-72;
   ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, sbx, y0+50, sbw, 8, 4); ctx.fill();
   ctx.fillStyle="#4fd1c5"; roundRect(ctx, sbx, y0+50, sbw*clamp(Math.abs(self.speed)/4.6,0,1), 8, 4); ctx.fill();
-  if (self.boosting){ ctx.fillStyle="#ff8b5b"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("⏩ BOOST · +25% speed", x0+w, y0+40); ctx.textAlign="left"; }
-  else if (self.cruise){ ctx.fillStyle="#5ee0a0"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("ECO · 25% less fuel", x0+w, y0+40); ctx.textAlign="left"; }
-  // fuel
-  ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText("FUEL", x0, y0+82);
-  ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, x0, y0+88, w, 14, 6); ctx.fill();
-  const fr=clamp(self.fuel/self.maxFuel,0,1);
-  ctx.fillStyle = fr>0.5?"#52c46a":fr>0.2?"#f1c40f":"#ff6b5b"; roundRect(ctx, x0, y0+88, w*fr, 14, 6); ctx.fill();
-  ctx.fillStyle="#dfe7ee"; ctx.font="600 11px system-ui"; ctx.textAlign="right"; ctx.fillText(Math.round(self.fuel)+" / "+self.maxFuel, x0+w, y0+82); ctx.textAlign="left";
+  if (self.boosting){ ctx.fillStyle="#ff8b5b"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("⏩ BOOST", x0+w, y0+40); ctx.textAlign="left"; }
+  else if (self.cruise){ ctx.fillStyle="#5ee0a0"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("ECO · 25% less", x0+w, y0+40); ctx.textAlign="left"; }
+  // energy bars
+  let by = y0 + 82;
+  if (hasFuelBar){ drawEnergyBar(x0, by, w, "FUEL", self.fuel, self.maxFuel, false); by += 30; }
+  if (hasBatBar){ drawEnergyBar(x0, by, w, "BATTERY", self.battery, self.maxBattery, true); by += 30; }
+}
+function drawEnergyBar(x0, y, w, label, val, max, isBattery){
+  ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+  ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText(label, x0, y);
+  // charging sun by the label
+  if (isBattery && self.solarCharging){
+    const pulse = 0.55 + 0.45*Math.sin(clock*6);
+    ctx.globalAlpha = pulse; ctx.fillStyle="#ffe066"; ctx.font="700 12px system-ui";
+    ctx.fillText("☀", x0 + ctx.measureText(label).width + 8, y+1); ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, x0, y+6, w, 14, 6); ctx.fill();
+  const r = clamp(val/max, 0, 1);
+  const col = isBattery ? (r>0.5?"#4fd1c5":r>0.2?"#f1c40f":"#ff6b5b") : (r>0.5?"#52c46a":r>0.2?"#f1c40f":"#ff6b5b");
+  ctx.fillStyle = col; roundRect(ctx, x0, y+6, w*r, 14, 6); ctx.fill();
+  // shimmer sweep across the filled portion while charging
+  if (isBattery && self.solarCharging && r > 0.02){
+    ctx.save(); roundRect(ctx, x0, y+6, w*r, 14, 6); ctx.clip();
+    const gx = x0 + (w*r) * ((clock*0.5) % 1);
+    const g = ctx.createLinearGradient(gx-18, 0, gx+18, 0);
+    g.addColorStop(0,"rgba(255,255,255,0)"); g.addColorStop(0.5,"rgba(255,255,255,0.55)"); g.addColorStop(1,"rgba(255,255,255,0)");
+    ctx.fillStyle = g; ctx.fillRect(x0, y+6, w, 14); ctx.restore();
+  }
+  ctx.fillStyle="#dfe7ee"; ctx.font="600 11px system-ui"; ctx.textAlign="right"; ctx.fillText((isBattery? val.toFixed(1) : Math.round(val)) + " / " + max, x0+w, y); ctx.textAlign="left";
+  // "+1" pop when solar adds a unit
+  if (isBattery && self.batteryPulseT < 1){
+    ctx.globalAlpha = Math.max(0, 1 - self.batteryPulseT);
+    ctx.fillStyle="#7dfbe0"; ctx.font="700 14px system-ui";
+    ctx.fillText("+1 ⚡", x0 + w*r - 4, y + 2 - self.batteryPulseT*18);
+    ctx.globalAlpha = 1;
+  }
 }
 function prompt(text, col){
   ctx.font="700 15px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
