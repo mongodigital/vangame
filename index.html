@@ -304,12 +304,16 @@ const stations = [
   { x:5300, y:1420 }, { x:4980, y:3060 }, { x:3500, y:3350 },
 ];
 const STATION_R = 92;
+// --- battery chargers (hybrid & electric only) ---
+const chargers = [ { x:2200, y:950 }, { x:3900, y:2200 }, { x:5250, y:700 } ];
+const CHARGER_R = 92;
 
-// keep stations, spawn, and depot clear of buildings
+// keep stations, chargers, spawn, and depot clear of buildings
 const SPAWN = { x: 360, y: 1372 };
 const DEPOT = { x: 620, y: 2470 };
 (() => {
   const zones = stations.map(s => ({ x:s.x, y:s.y, r:STATION_R+30 }))
+    .concat(chargers.map(c => ({ x:c.x, y:c.y, r:CHARGER_R+30 })))
     .concat([{ x:SPAWN.x, y:SPAWN.y, r:90 }, { x:DEPOT.x, y:DEPOT.y, r:240 }]);
   for (let i=buildings.length-1;i>=0;i--){
     const b = buildings[i];
@@ -375,6 +379,19 @@ const fuelBoosts = [];
   }
 })();
 const takenBoosts = new Set(), requestedBoosts = new Set();
+
+// --- electric fills (+1 battery each; 2 on the map; respawn 60s after pickup) ---
+const ELEC_FILL_AMOUNT = 1, ELEC_FILL_COUNT = 2, ELEC_RESPAWN_MS = 60000;
+const elecFills = [];
+(() => {
+  let placed=0, tries=0, id=0;
+  while (placed < ELEC_FILL_COUNT && tries < 4000){ tries++;
+    const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
+    if (blockedStatic(x, y, 14)) continue;
+    elecFills.push({ id:"e"+(id++), x, y }); placed++;
+  }
+})();
+const takenElec = new Set(), requestedElec = new Set();
 
 const COIN_RESPAWN_MS = 30000;      // a picked-up coin/boost respawns 30s later in a new spot
 const coinRespawnQueue = [];        // host only: [{ id, at }]
@@ -861,6 +878,7 @@ function updateTouchButtons(){
   let label="", act="", tid="";
   if (my){ label="Drop"; act="drop"; }
   else if (self.atStation && self.fuel<self.maxFuel){ label="⛽ Fuel"; act="fuel"; }
+  else if (self.atCharger && self.maxBattery>0 && self.battery<self.maxBattery){ label="⚡ Charge"; act="fuel"; }   // fuelHold drives charging too
   else { for (const t of trailers){ if (t.towedBy) continue; if (Math.hypot(t.tx-self.x, t.ty-self.y)<HITCH_R*1.7){ label="Hitch"; act="hitch"; tid=t.id; break; } } }
   if (act){ if (btnAction.dataset.act!==act || btnAction.textContent!==label){ btnAction.textContent=label; btnAction.dataset.act=act; } btnAction.dataset.tid=tid; btnAction.style.display="block"; }
   else if (btnAction.style.display!=="none"){ btnAction.style.display="none"; btnAction.dataset.act=""; }
@@ -887,6 +905,8 @@ function worldSnapshot(){
            taken: Array.from(takenCoins),
            boosts: fuelBoosts.map(b => ({ id:b.id, x:b.x, y:b.y })),
            takenBoosts: Array.from(takenBoosts),
+           elecs: elecFills.map(e => ({ id:e.id, x:e.x, y:e.y })),
+           takenElecs: Array.from(takenElec),
            trailers: trailers.map(t => ({ id:t.id, towedBy:t.towedBy, x:t.x, y:t.y, angle:t.angle })) };
 }
 
@@ -903,6 +923,7 @@ startBtn.onclick = () => {
     propulsion: config.propulsion, battery: maxBatteryFor(config), maxBattery: maxBatteryFor(config),
     solarPanels: solarPanelsFor(config), solarAccum: 0, solarCharging: false, batteryPulseT: 99,
     coins: 100, refueling:false, atStation:false, fuelSession:false, fuelMsg:"",
+    atCharger:false, chargeSession:false, charging:false, chargeMsg:"",
     tHold:0, tConsumed:false, fuelHold:false, throttleHold:0, cruise:false,
     waypoints:[], reverseTarget:null, hitchIntent:null, stuckT:0,
     boost:false, boosting:false, accelTapArmed:false, accelTapTime:0, accelPressTime:0,
@@ -976,6 +997,7 @@ function hostHandle(conn, m){
     hostBroadcast({ type:"honk", id:conn.peer }, conn.peer); applyIncoming({ type:"honk", id:conn.peer });
   } else if (m.type === "grab"){ hostGrabCoin(m.id, conn.peer);
   } else if (m.type === "grabBoost"){ hostGrabBoost(m.id, conn.peer);
+  } else if (m.type === "grabElec"){ hostGrabElec(m.id, conn.peer);
   } else if (m.type === "hitch"){ hostHitchTrailer(m.tid, conn.peer);
   } else if (m.type === "drop"){ hostDropTrailer(m.tid, conn.peer, m.x, m.y, m.angle);
   } else if (m.type === "chat"){
@@ -995,6 +1017,11 @@ function hostGrabBoost(id, by){
   if (takenBoosts.has(id)) return;
   const msg = { type:"boostTaken", id, by }; applyBoostTaken(msg); hostBroadcast(msg);
   coinRespawnQueue.push({ kind:"boost", id, at: performance.now() + COIN_RESPAWN_MS });
+}
+function hostGrabElec(id, by){
+  if (takenElec.has(id)) return;
+  const msg = { type:"elecTaken", id, by }; applyElecTaken(msg); hostBroadcast(msg);
+  coinRespawnQueue.push({ kind:"elec", id, at: performance.now() + ELEC_RESPAWN_MS });   // respawn after 60s
 }
 function hostHitchTrailer(tid, by){
   const tr = trailers.find(t=>t.id===tid);
@@ -1031,6 +1058,7 @@ net.sendState = (s) => {
 net.sendHonk = () => { if (net.isHost) hostBroadcast({ type:"honk", id:net.selfId }); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"honk" }); };
 net.grabCoin = (id) => { if (net.isHost) hostGrabCoin(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grab", id }); };
 net.grabBoost = (id) => { if (net.isHost) hostGrabBoost(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabBoost", id }); };
+net.grabElec = (id) => { if (net.isHost) hostGrabElec(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabElec", id }); };
 net.hitch = (tid) => { if (net.isHost) hostHitchTrailer(tid, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"hitch", tid }); };
 net.drop = (tid, x, y, angle) => { if (net.isHost) hostDropTrailer(tid, self.id, x, y, angle); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"drop", tid, x, y, angle }); };
 net.sendChat = (text) => { const msg={ type:"chat", id:self.id, name:self.name, color:self.config.color, text }; if (net.isHost) hostBroadcast(msg); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"chat", text }); };
@@ -1040,6 +1068,8 @@ function applyTaken(m){ takenCoins.add(m.id); if (m.by === self.id){ self.coins 
 function applyCoinRespawn(m){ const c = coins.find(c=>c.id===m.id); if (!c) return; c.x=m.x; c.y=m.y; takenCoins.delete(m.id); requestedCoins.delete(m.id); }
 function applyBoostTaken(m){ takenBoosts.add(m.id); if (m.by === self.id){ self.fuel = Math.min(self.maxFuel, self.fuel + FUEL_BOOST_AMOUNT); const b = fuelBoosts.find(b=>b.id===m.id); if (b) floaters.push({ x:b.x, y:b.y, t:0, text:"+"+FUEL_BOOST_AMOUNT+" fuel", col:"#4fd1c5", big:true }); } }
 function applyBoostRespawn(m){ const b = fuelBoosts.find(b=>b.id===m.id); if (!b) return; b.x=m.x; b.y=m.y; takenBoosts.delete(m.id); requestedBoosts.delete(m.id); }
+function applyElecTaken(m){ takenElec.add(m.id); if (m.by === self.id){ self.battery = Math.min(self.maxBattery, self.battery + ELEC_FILL_AMOUNT); const e = elecFills.find(e=>e.id===m.id); if (e) floaters.push({ x:e.x, y:e.y, t:0, text:"+"+ELEC_FILL_AMOUNT+" ⚡", col:"#7dfbe0", big:true }); } }
+function applyElecRespawn(m){ const e = elecFills.find(e=>e.id===m.id); if (!e) return; e.x=m.x; e.y=m.y; takenElec.delete(m.id); requestedElec.delete(m.id); }
 function processCoinRespawns(){
   if (!net.isHost || !coinRespawnQueue.length) return;
   const now = performance.now();
@@ -1048,6 +1078,7 @@ function processCoinRespawns(){
       const item = coinRespawnQueue[i]; coinRespawnQueue.splice(i,1);
       const p = randomDrivablePoint();
       if (item.kind === "boost"){ const msg = { type:"boostRespawn", id:item.id, x:p.x, y:p.y }; applyBoostRespawn(msg); hostBroadcast(msg); }
+      else if (item.kind === "elec"){ const msg = { type:"elecRespawn", id:item.id, x:p.x, y:p.y }; applyElecRespawn(msg); hostBroadcast(msg); }
       else { const msg = { type:"coinRespawn", id:item.id, x:p.x, y:p.y }; applyCoinRespawn(msg); hostBroadcast(msg); }
     }
   }
@@ -1071,6 +1102,8 @@ function applyIncoming(m){
       (m.world.taken||[]).forEach(id => takenCoins.add(id));
       if (m.world.boosts) for (const wb of m.world.boosts){ const b=fuelBoosts.find(b=>b.id===wb.id); if (b){ b.x=wb.x; b.y=wb.y; } }
       (m.world.takenBoosts||[]).forEach(id => takenBoosts.add(id));
+      if (m.world.elecs) for (const we of m.world.elecs){ const e=elecFills.find(e=>e.id===we.id); if (e){ e.x=we.x; e.y=we.y; } }
+      (m.world.takenElecs||[]).forEach(id => takenElec.add(id));
       (m.world.trailers||[]).forEach(applyTrailer);
     }
     return;
@@ -1084,6 +1117,8 @@ function applyIncoming(m){
   if (m.type === "coinRespawn"){ applyCoinRespawn(m); return; }
   if (m.type === "boostTaken"){ applyBoostTaken(m); return; }
   if (m.type === "boostRespawn"){ applyBoostRespawn(m); return; }
+  if (m.type === "elecTaken"){ applyElecTaken(m); return; }
+  if (m.type === "elecRespawn"){ applyElecRespawn(m); return; }
   if (m.type === "trailer"){ applyTrailer(m); return; }
   if (m.type === "delivered"){ applyDelivered(m); return; }
   if (m.type === "chat"){ if (m.id !== self.id) addChatLine(m.name, m.color, m.text); return; }
@@ -1280,12 +1315,30 @@ function update(dt, f){
   }
   s.refueling = s.fuelSession;
 
-  // ---- coin + fuel-boost pickups (host decides who actually gets it) ----
+  // ---- battery chargers: hold F, 25 coins per session, charges 10x slower than fueling (hybrid/electric) ----
+  let atCharger = false;
+  for (const ch of chargers){ const dx=s.x-ch.x, dy=s.y-ch.y; if (dx*dx+dy*dy < CHARGER_R*CHARGER_R){ atCharger=true; break; } }
+  s.atCharger = atCharger; s.chargeMsg = "";
+  const wantCharge = atCharger && fuelBtn && s.maxBattery > 0 && s.battery < s.maxBattery;
+  if (wantCharge && !s.chargeSession){
+    if (s.coins >= 25){ s.coins -= 25; s.chargeSession = true; floaters.push({ x:s.x, y:s.y-30, t:0, text:"-25", col:"#ff9a76" }); }
+    else s.chargeMsg = "Need 25 coins";
+  }
+  if (s.chargeSession){
+    if (atCharger && fuelBtn && s.battery < s.maxBattery) s.battery = Math.min(s.maxBattery, s.battery + 3.4*dt);   // 1/10 of the 34/s fuel rate
+    else s.chargeSession = false;
+  }
+  s.charging = s.chargeSession;
+
+  // ---- coin + fuel-boost + electric-fill pickups (host decides who actually gets it) ----
   for (const c of coins){ if (takenCoins.has(c.id) || requestedCoins.has(c.id)) continue;
     const dx=s.x-c.x, dy=s.y-c.y; if (dx*dx+dy*dy < COIN_R*COIN_R){ requestedCoins.add(c.id); net.grabCoin(c.id); }
   }
   for (const b of fuelBoosts){ if (takenBoosts.has(b.id) || requestedBoosts.has(b.id)) continue;
     const dx=s.x-b.x, dy=s.y-b.y; if (dx*dx+dy*dy < COIN_R*COIN_R){ requestedBoosts.add(b.id); net.grabBoost(b.id); }
+  }
+  for (const e of elecFills){ if (takenElec.has(e.id) || requestedElec.has(e.id)) continue;
+    const dx=s.x-e.x, dy=s.y-e.y; if (s.maxBattery > 0 && dx*dx+dy*dy < COIN_R*COIN_R){ requestedElec.add(e.id); net.grabElec(e.id); }   // battery vehicles only
   }
 
   // ---- trailer hitch / drop (hold T ~0.35s) ----
@@ -1394,6 +1447,16 @@ function render(){
     ctx.fillStyle="#ffd98a"; ctx.font="600 11px system-ui"; ctx.fillText("FUEL", st.x, st.y+20);
   }
 
+  // battery chargers
+  for (const ch of chargers){
+    if (!vis(ch.x,ch.y,CHARGER_R)) continue;
+    ctx.fillStyle = "rgba(79,209,197,0.14)"; ctx.beginPath(); ctx.arc(ch.x, ch.y, CHARGER_R, 0, 7); ctx.fill();
+    ctx.fillStyle = "#233b3a"; roundRect(ctx, ch.x-30, ch.y-26, 60, 52, 8); ctx.fill();
+    ctx.fillStyle = "#4fd1c5"; roundRect(ctx, ch.x-11, ch.y-20, 22, 30, 4); ctx.fill();
+    ctx.fillStyle = "#0d2a28"; ctx.font = "bold 20px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⚡", ch.x, ch.y-4);
+    ctx.fillStyle="#9ff0e6"; ctx.font="600 10px system-ui"; ctx.fillText("CHARGE", ch.x, ch.y+20);
+  }
+
   // buildings
   for (const b of buildings){
     if (b.x>vR||b.x+b.w<vL||b.y>vB||b.y+b.h<vT) continue;
@@ -1428,6 +1491,15 @@ function render(){
     ctx.strokeStyle = "#1c8577"; ctx.lineWidth = 2; ctx.stroke();
     ctx.fillStyle = "#1c8577"; ctx.fillRect(b.x-4, b.y-13+bob, 8, 4);   // cap
     ctx.fillStyle = "#e6fff9"; ctx.font = "800 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("+", b.x, b.y+bob+1);
+  }
+
+  // electric fills (+1 battery)
+  for (const e of elecFills){ if (takenElec.has(e.id) || !vis(e.x,e.y,20)) continue;
+    const bob = Math.sin(clock*4 + e.x*0.05)*2;
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(e.x, e.y+10, 8, 3, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#4fd1c5"; ctx.beginPath(); ctx.arc(e.x, e.y+bob, 9, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#2a9d8f"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#0d2a28"; ctx.font = "800 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⚡", e.x, e.y+bob+1);
   }
 
   // trailers (draw before vans)
@@ -1470,7 +1542,9 @@ function render(){
 
   drawMinimap();
   if (self.refueling) prompt("⛽ Refueling…", "#52c46a");
+  else if (self.charging) prompt("⚡ Charging…", "#4fd1c5");
   else if (self.atStation && self.fuel<self.maxFuel) prompt(self.fuelMsg ? "⛽ "+self.fuelMsg : "⛽ Hold F to fuel — 25 coins", self.fuelMsg ? "#ff8b5b" : "#ffb03a");
+  else if (self.atCharger && self.maxBattery>0 && self.battery<self.maxBattery) prompt(self.chargeMsg ? "⚡ "+self.chargeMsg : "⚡ Hold F to charge — 25 coins", self.chargeMsg ? "#ff8b5b" : "#4fd1c5");
   drawStats();
   drawTimeOfDay();
   if (touchMode) updateTouchButtons();
@@ -1541,6 +1615,8 @@ function drawMinimap(){
   for (const z of dropZones){ ctx.fillStyle="#5ee0a0"; ctx.beginPath(); ctx.arc(x0+z.x*mmScale, y0+z.y*mmScale, 3.2, 0, 7); ctx.fill(); }
   for (const b of fuelBoosts){ if (takenBoosts.has(b.id)) continue; ctx.fillStyle="#2bb8a3"; ctx.fillRect(x0+b.x*mmScale-2.2, y0+b.y*mmScale-2.2, 4.4, 4.4); }
   for (const st of stations){ ctx.fillStyle="#ffb03a"; ctx.beginPath(); ctx.arc(x0+st.x*mmScale, y0+st.y*mmScale, 2.6, 0, 7); ctx.fill(); }
+  for (const ch of chargers){ ctx.fillStyle="#4fd1c5"; ctx.beginPath(); ctx.arc(x0+ch.x*mmScale, y0+ch.y*mmScale, 2.8, 0, 7); ctx.fill(); ctx.strokeStyle="#0d2a28"; ctx.lineWidth=1; ctx.stroke(); }
+  for (const e of elecFills){ if (takenElec.has(e.id)) continue; ctx.fillStyle="#7dfbe0"; ctx.beginPath(); ctx.arc(x0+e.x*mmScale, y0+e.y*mmScale, 2.2, 0, 7); ctx.fill(); }
   for (const tr of trailers){ ctx.fillStyle="#c9a24a"; ctx.fillRect(x0+tr.tx*mmScale-2, y0+tr.ty*mmScale-2, 4, 4); }
   const blip=(px,py,color,me)=>{ const bx=x0+px*mmScale, by=y0+py*mmScale; if(me){ ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(bx,by,4.5,0,7); ctx.fill(); } ctx.fillStyle=color; ctx.beginPath(); ctx.arc(bx,by,me?3:3.2,0,7); ctx.fill(); };
   for (const r of remotes.values()) blip(r.rx, r.ry, (r.config&&r.config.color)||"#fff", false);
