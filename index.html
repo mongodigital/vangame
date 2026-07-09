@@ -349,13 +349,22 @@ const coins = [];
 })();
 const takenCoins = new Set();
 const requestedCoins = new Set();   // coins we've already asked the host for
+const COIN_RESPAWN_MS = 30000;      // a picked-up coin respawns 30s later in a new spot
+const coinRespawnQueue = [];        // host only: [{ id, at }]
+let deliverySinceBonus = 0;         // host only: pity counter for the 5× delivery bonus
+function randomDrivablePoint(){
+  for (let i=0;i<250;i++){ const x=80+Math.random()*(WORLD_W-160), y=80+Math.random()*(WORLD_H-160); if (!blockedStatic(x,y,18)) return { x, y }; }
+  return { x:SPAWN.x, y:SPAWN.y };
+}
 
-// --- supply trailers (start at the depot) ---
+// --- supply trailers (spawn at random drivable spots; deterministic so every client agrees) ---
 const TRAILER_LEN = 58, TRAILER_W = 32;
-const trailers = [
-  { id:"t0", x:480, y:2360, angle:0, homeX:480, homeY:2360, towedBy:null, tx:480, ty:2360, tangle:0 },
-  { id:"t1", x:480, y:2560, angle:0, homeX:480, homeY:2560, towedBy:null, tx:480, ty:2560, tangle:0 },
-];
+const trailers = [];
+for (let i=0;i<2;i++){
+  let x=SPAWN.x, y=SPAWN.y;
+  for (let tries=0; tries<400; tries++){ const rx=120+rng()*(WORLD_W-240), ry=120+rng()*(WORLD_H-240); if (!blockedStatic(rx,ry,22)){ x=rx; y=ry; break; } }
+  trailers.push({ id:"t"+i, x, y, angle:0, homeX:x, homeY:y, towedBy:null, tx:x, ty:y, tangle:0 });
+}
 
 // --- delivery drop-zones: nearest to depot pays 5, +5 for each farther ---
 const dropZones = [ {x:2650,y:620}, {x:3250,y:2450}, {x:5300,y:1420}, {x:5050,y:3120} ]
@@ -702,7 +711,8 @@ function snapshot(){
            angle:self.angle, speed:self.speed||0, fuel:self.fuel, coins:self.coins };
 }
 function worldSnapshot(){
-  return { taken: Array.from(takenCoins),
+  return { coins: coins.map(c => ({ id:c.id, x:c.x, y:c.y })),
+           taken: Array.from(takenCoins),
            trailers: trailers.map(t => ({ id:t.id, towedBy:t.towedBy, x:t.x, y:t.y, angle:t.angle })) };
 }
 
@@ -801,6 +811,7 @@ function hostBroadcast(msg, exceptId){ for (const [pid,c] of net.conns){ if (pid
 function hostGrabCoin(id, by){
   if (takenCoins.has(id)) return;
   const msg = { type:"taken", id, by }; applyTaken(msg); hostBroadcast(msg);
+  coinRespawnQueue.push({ id, at: performance.now() + COIN_RESPAWN_MS });   // reappears elsewhere in 30s
 }
 function hostHitchTrailer(tid, by){
   const tr = trailers.find(t=>t.id===tid);
@@ -814,9 +825,14 @@ function hostDropTrailer(tid, by, x, y, angle){
   if (!tr || tr.towedBy !== by) return;
   const zone = dropZones.find(z => (x-z.x)**2 + (y-z.y)**2 < z.r*z.r);
   if (zone){
-    const dmsg = { type:"delivered", by, value: zone.value, x: zone.x, y: zone.y };
+    deliverySinceBonus++;
+    const bonus = (Math.random() < 1/12) || (deliverySinceBonus >= 20);   // guaranteed ≥ once per 20
+    if (bonus) deliverySinceBonus = 0;
+    const value = bonus ? zone.value * 5 : zone.value;
+    const dmsg = { type:"delivered", by, value, bonus, x: zone.x, y: zone.y };
     applyDelivered(dmsg); hostBroadcast(dmsg);
-    const tmsg = { type:"trailer", id:tid, towedBy:null, x:tr.homeX, y:tr.homeY, angle:0 };
+    const np = randomDrivablePoint();                                     // trailer reappears somewhere new
+    const tmsg = { type:"trailer", id:tid, towedBy:null, x:np.x, y:np.y, angle:0 };
     applyTrailer(tmsg); hostBroadcast(tmsg);
   } else {
     const tmsg = { type:"trailer", id:tid, towedBy:null, x, y, angle };
@@ -837,17 +853,37 @@ net.sendChat = (text) => { const msg={ type:"chat", id:self.id, name:self.name, 
 
 /* apply state changes locally (both roles) */
 function applyTaken(m){ takenCoins.add(m.id); if (m.by === self.id){ self.coins += COIN_VALUE; const c = coins.find(c=>c.id===m.id); if (c) floaters.push({ x:c.x, y:c.y, t:0, text:"+"+COIN_VALUE, col:"#ffd23f" }); } }
+function applyCoinRespawn(m){ const c = coins.find(c=>c.id===m.id); if (!c) return; c.x=m.x; c.y=m.y; takenCoins.delete(m.id); requestedCoins.delete(m.id); }
+function processCoinRespawns(){
+  if (!net.isHost || !coinRespawnQueue.length) return;
+  const now = performance.now();
+  for (let i=coinRespawnQueue.length-1;i>=0;i--){
+    if (now >= coinRespawnQueue[i].at){
+      const id = coinRespawnQueue[i].id; coinRespawnQueue.splice(i,1);
+      const p = randomDrivablePoint(); const msg = { type:"coinRespawn", id, x:p.x, y:p.y };
+      applyCoinRespawn(msg); hostBroadcast(msg);
+    }
+  }
+}
 function applyTrailer(m){
   const tr = trailers.find(t=>t.id===m.id); if (!tr) return;
   tr.towedBy = m.towedBy;
   if (m.towedBy == null){ tr.x=m.x; tr.y=m.y; tr.angle=m.angle; tr.tx=m.x; tr.ty=m.y; tr.tangle=m.angle; }
 }
-function applyDelivered(m){ if (m.by === self.id) self.coins += m.value; floaters.push({ x:m.x, y:m.y, t:0, text:"+"+m.value, col:"#5ee0a0", big:true }); }
+function applyDelivered(m){
+  if (m.by === self.id) self.coins += m.value;
+  floaters.push({ x:m.x, y:m.y, t:0, text:(m.bonus?"★5× +":"+")+m.value, col:m.bonus?"#ffd23f":"#5ee0a0", big:true });
+  if (m.bonus) floaters.push({ x:m.x, y:m.y-26, t:0, text:"BONUS!", col:"#ffd23f", big:true });
+}
 
 function applyIncoming(m){
   if (m.type === "welcome"){
     for (const id in m.players){ if (id !== self.id) upsertRemote(m.players[id]); }
-    if (m.world){ (m.world.taken||[]).forEach(id => takenCoins.add(id)); (m.world.trailers||[]).forEach(applyTrailer); }
+    if (m.world){
+      if (m.world.coins) for (const wc of m.world.coins){ const c=coins.find(c=>c.id===wc.id); if (c){ c.x=wc.x; c.y=wc.y; } }
+      (m.world.taken||[]).forEach(id => takenCoins.add(id));
+      (m.world.trailers||[]).forEach(applyTrailer);
+    }
     return;
   }
   if (m.type === "full"){ showFull(); return; }
@@ -856,6 +892,7 @@ function applyIncoming(m){
     r.x=m.x; r.y=m.y; r.angle=m.angle; r.speed=m.speed; r.fuel=m.fuel; if (typeof m.coins==="number") r.coins=m.coins; return; }
   if (m.type === "honk"){ const r = remotes.get(m.id); if (r){ rings.push({x:r.x,y:r.y,t:0}); playMariachi(); } return; }
   if (m.type === "taken"){ applyTaken(m); return; }
+  if (m.type === "coinRespawn"){ applyCoinRespawn(m); return; }
   if (m.type === "trailer"){ applyTrailer(m); return; }
   if (m.type === "delivered"){ applyDelivered(m); return; }
   if (m.type === "chat"){ if (m.id !== self.id) addChatLine(m.name, m.color, m.text); return; }
@@ -931,7 +968,7 @@ let last = performance.now(), sendAcc = 0;
 function loop(now){
   const dt = Math.min((now-last)/1000, 0.05); last = now; clock += dt;
   const f = dt*60;
-  update(dt, f); render();
+  update(dt, f); processCoinRespawns(); render();
   sendAcc += dt;
   if (sendAcc >= 0.06){ sendAcc = 0; net.sendState({ x:self.x, y:self.y, angle:self.angle, speed:self.speed, fuel:self.fuel, coins:self.coins }); }
   requestAnimationFrame(loop);
@@ -1275,7 +1312,7 @@ function drawStats(){
   const sbx=x0+72, sbw=w-72;
   ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, sbx, y0+50, sbw, 8, 4); ctx.fill();
   ctx.fillStyle="#4fd1c5"; roundRect(ctx, sbx, y0+50, sbw*clamp(Math.abs(self.speed)/4.6,0,1), 8, 4); ctx.fill();
-  if (self.cruise){ ctx.fillStyle="#5ee0a0"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("ECO −25% fuel", x0+w, y0+40); ctx.textAlign="left"; }
+  if (self.cruise){ ctx.fillStyle="#5ee0a0"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("ECO · 25% less fuel", x0+w, y0+40); ctx.textAlign="left"; }
   // fuel
   ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText("FUEL", x0, y0+82);
   ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, x0, y0+88, w, 14, 6); ctx.fill();
