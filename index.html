@@ -60,6 +60,12 @@
     padding: 10px 14px; font-size: 14px; cursor: pointer; font-weight: 600; }
   .toggle button.on { background: var(--accent); color: #10161f; }
 
+  .roofslots { display: flex; flex-wrap: wrap; gap: 8px; }
+  .roofslot { display: flex; align-items: center; gap: 6px; }
+  .slotnum { font-size: 11px; color: #93a4b5; background: #0f1620; border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; font-weight: 700; }
+  .roofsel { background: #0f1620; color: #eef2f6; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; cursor: pointer; }
+  .roofsel:focus { outline: none; border-color: var(--accent2); }
+
   .preview-wrap { background: linear-gradient(160deg,#101a12,#0e1520);
     border: 1px solid var(--line); border-radius: 14px; padding: 10px;
     display: flex; flex-direction: column; align-items: center; }
@@ -151,6 +157,8 @@
         </label>
       </div>
     </div>
+    <label class="field" style="margin-top:2px"><span>Roof accessories</span>
+      <div id="roofSlots" class="roofslots"></div></label>
     <button class="btn big" id="startBtn">Hit the road</button>
     <div class="err" id="lobbyErr"></div>
   </div>
@@ -495,10 +503,68 @@ function drawVan(ctx, config){
     ctx.fillStyle = "#c0392b"; roundRect(ctx,-L/2-12,-7,12,14,2); ctx.fill();
     ctx.fillStyle = "#7d2519"; ctx.fillRect(-L/2-9,-9,4,3);
   }
+  // roof accessories (sit on the roof, drawn last / on top)
+  const roof = config && config.roof;
+  if (roof && roof.length){
+    const pos = roofSlotPositions(config), n = roofSlots(config);
+    const aw = Math.min(((L-38)/n)*0.86, 24), ah = 18;
+    for (let i=0;i<pos.length;i++){ const id = roof[i]; if (!id || id==="none") continue;
+      ctx.save(); ctx.translate(pos[i], 0); drawAccessory(ctx, id, aw, ah); ctx.restore(); }
+  }
 }
 function maxFuelFor(config){ return config && config.extra === "fuel" ? 160 : 100; }
 // consumption multiplier by vehicle: short 1x, long 1.1x, bus 1.25x
 function fuelFactor(config){ const l = config && config.length; return l === "bus" ? 1.25 : l === "long" ? 1.1 : 1; }
+
+/* ---- roof accessory slots: short van 1, long van 2, bus 3 ---- */
+function roofSlots(config){ const l = config && config.length; return l === "bus" ? 3 : l === "long" ? 2 : 1; }
+const ACCESSORIES = [
+  { id:"none",     name:"Empty" },
+  { id:"rack",     name:"Roof rack" },
+  { id:"cargo",    name:"Cargo box" },
+  { id:"fuelcan",  name:"Fuel can" },
+  { id:"lightbar", name:"Light bar" },
+  { id:"kayak",    name:"Kayak" },
+  { id:"crate",    name:"Supply crate" },
+  { id:"spare",    name:"Spare tire" },
+];
+function roofSlotPositions(config){
+  const L = vanLength(config), n = roofSlots(config);
+  const x0 = -L/2 + 16, x1 = L/2 - 22, zone = x1 - x0;
+  const out = []; for (let i=0;i<n;i++) out.push(x0 + zone*(i+0.5)/n); return out;
+}
+// draw one accessory centered at origin (x = along length, y = across width)
+function drawAccessory(ctx, id, w, h){
+  if (id === "rack"){
+    ctx.strokeStyle="#31363e"; ctx.lineWidth=2; ctx.lineCap="round";
+    for (const sy of [-h*0.36, h*0.36]){ ctx.beginPath(); ctx.moveTo(-w/2,sy); ctx.lineTo(w/2,sy); ctx.stroke(); }
+    for (let i=0;i<3;i++){ const cx=-w/2 + w*(i+0.5)/3; ctx.beginPath(); ctx.moveTo(cx,-h*0.36); ctx.lineTo(cx,h*0.36); ctx.stroke(); }
+    ctx.lineCap="butt";
+  } else if (id === "cargo"){
+    ctx.fillStyle="#2b3440"; roundRect(ctx,-w*0.44,-h*0.42,w*0.88,h*0.84,3); ctx.fill();
+    ctx.strokeStyle="#1c232c"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.strokeStyle="#3c4653"; ctx.beginPath(); ctx.moveTo(-w*0.44,0); ctx.lineTo(w*0.44,0); ctx.stroke();
+  } else if (id === "fuelcan"){
+    ctx.fillStyle="#c0392b"; roundRect(ctx,-w*0.28,-h*0.42,w*0.56,h*0.84,2); ctx.fill();
+    ctx.strokeStyle="#7d2519"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle="#7d2519"; ctx.fillRect(-w*0.1,-h*0.5,w*0.2,h*0.12);
+  } else if (id === "lightbar"){
+    ctx.fillStyle="#20262e"; roundRect(ctx,-w*0.42,-h*0.22,w*0.84,h*0.44,2); ctx.fill();
+    ctx.fillStyle="#fff2a8"; const n=4; for (let i=0;i<n;i++){ const cx=-w*0.34 + (w*0.68)*i/(n-1); ctx.beginPath(); ctx.arc(cx,0,h*0.13,0,7); ctx.fill(); }
+  } else if (id === "kayak"){
+    ctx.fillStyle="#e08a3c"; ctx.beginPath(); ctx.ellipse(0,0,w*0.46,h*0.24,0,0,7); ctx.fill();
+    ctx.strokeStyle="#b96f2a"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-w*0.3,0); ctx.lineTo(w*0.3,0); ctx.stroke();
+  } else if (id === "crate"){
+    ctx.fillStyle="#9c6f34"; roundRect(ctx,-w*0.4,-h*0.4,w*0.8,h*0.8,2); ctx.fill();
+    ctx.strokeStyle="#6f4e22"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-w*0.4,-h*0.4); ctx.lineTo(w*0.4,h*0.4); ctx.moveTo(w*0.4,-h*0.4); ctx.lineTo(-w*0.4,h*0.4); ctx.stroke();
+  } else if (id === "spare"){
+    const r = Math.min(w,h)*0.42;
+    ctx.fillStyle="#141414"; ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.fill();
+    ctx.fillStyle="#4d4d4d"; ctx.beginPath(); ctx.arc(0,0,r*0.4,0,7); ctx.fill();
+  }
+}
 
 /* =====================================================================
    LOBBY
@@ -509,7 +575,7 @@ const roomInput = document.getElementById("roomInput");
 const startBtn = document.getElementById("startBtn");
 const lobbyErr = document.getElementById("lobbyErr");
 const shareHint = document.getElementById("shareHint");
-const config = { color: PALETTE[5], length:"short", rearTires:"4x4", extra:"spare" };
+const config = { color: PALETTE[5], length:"short", rearTires:"4x4", extra:"spare", roof:["none"] };
 
 const swatchWrap = document.getElementById("swatches");
 PALETTE.forEach(c => {
@@ -527,10 +593,30 @@ swatchWrap.appendChild(customColor);
 function wireToggle(id, key){
   const grp = document.getElementById(id);
   grp.querySelectorAll("button").forEach(btn => {
-    btn.onclick = () => { grp.querySelectorAll("button").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); config[key] = btn.dataset.v; drawPreview(); };
+    btn.onclick = () => { grp.querySelectorAll("button").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); config[key] = btn.dataset.v; if (key==="length") syncRoofSlots(); drawPreview(); };
   });
 }
 wireToggle("lengthToggle","length"); wireToggle("tiresToggle","rearTires"); wireToggle("extraToggle","extra");
+
+/* roof-accessory garage: one selector per slot; slot count follows the vehicle */
+function renderRoofSlots(){
+  const wrap = document.getElementById("roofSlots"); wrap.innerHTML = "";
+  const n = roofSlots(config);
+  for (let i=0;i<n;i++){
+    const cell = document.createElement("div"); cell.className = "roofslot";
+    if (n>1){ const num = document.createElement("span"); num.className="slotnum"; num.textContent = i+1; cell.appendChild(num); }
+    const sel = document.createElement("select"); sel.className = "roofsel";
+    for (const a of ACCESSORIES){ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; if ((config.roof[i]||"none")===a.id) o.selected=true; sel.appendChild(o); }
+    sel.onchange = () => { config.roof[i] = sel.value; drawPreview(); };
+    cell.appendChild(sel); wrap.appendChild(cell);
+  }
+}
+function syncRoofSlots(){
+  const n = roofSlots(config), cur = config.roof || [];
+  config.roof = []; for (let i=0;i<n;i++) config.roof[i] = cur[i] || "none";
+  renderRoofSlots();
+}
+syncRoofSlots();
 
 const pv = document.getElementById("previewCanvas");
 const pctx = pv.getContext("2d");
