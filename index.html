@@ -6,9 +6,7 @@
 <title>Vanbound — co-op van adventure</title>
 <style>
   :root {
-    --ink: #1b2430;
     --panel: rgba(20, 28, 38, 0.82);
-    --panel-solid: #141c26;
     --line: rgba(255,255,255,0.12);
     --accent: #ffb03a;
     --accent2: #4fd1c5;
@@ -18,8 +16,7 @@
   html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1117; }
   body {
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    color: #eef2f6;
-    user-select: none;
+    color: #eef2f6; user-select: none;
   }
   #game { display: block; position: fixed; inset: 0; }
 
@@ -31,24 +28,17 @@
       radial-gradient(1200px 600px at 70% -10%, #23405e 0%, transparent 60%),
       radial-gradient(900px 500px at 10% 110%, #2a5a3a 0%, transparent 55%),
       linear-gradient(160deg, #0e1520, #0b1017);
-    padding: 20px;
-    overflow: auto;
+    padding: 20px; overflow: auto;
   }
   .card {
-    width: min(860px, 100%);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    padding: 26px 28px 30px;
-    box-shadow: 0 30px 80px rgba(0,0,0,0.5);
-    backdrop-filter: blur(8px);
+    width: min(860px, 100%); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 18px;
+    padding: 26px 28px 30px; box-shadow: 0 30px 80px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
   }
   .title { display: flex; align-items: baseline; gap: 12px; margin: 0 0 2px; }
   .title h1 { font-size: 30px; margin: 0; letter-spacing: -0.5px; }
-  .title .badge {
-    font-size: 12px; color: #0d1117; background: var(--accent);
-    padding: 3px 8px; border-radius: 999px; font-weight: 700;
-  }
+  .title .badge { font-size: 12px; color: #0d1117; background: var(--accent);
+    padding: 3px 8px; border-radius: 999px; font-weight: 700; }
   .subtitle { color: #9fb0c0; margin: 0 0 20px; font-size: 14.5px; }
   .grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 22px; }
   @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
@@ -56,21 +46,16 @@
   label.field { display: block; margin: 0 0 16px; }
   label.field > span { display: block; font-size: 12.5px; text-transform: uppercase;
     letter-spacing: 0.6px; color: #93a4b5; margin-bottom: 7px; }
-  input[type=text] {
-    width: 100%; padding: 11px 13px; font-size: 15px; color: #eef2f6;
-    background: #0f1620; border: 1px solid var(--line); border-radius: 10px;
-  }
+  input[type=text] { width: 100%; padding: 11px 13px; font-size: 15px; color: #eef2f6;
+    background: #0f1620; border: 1px solid var(--line); border-radius: 10px; }
   input[type=text]:focus { outline: none; border-color: var(--accent2); }
 
   .swatches { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .swatch { width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
-    border: 2px solid transparent; }
+  .swatch { width: 30px; height: 30px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
   .swatch.sel { border-color: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,0.4) inset; }
-  input[type=color] { width: 34px; height: 34px; padding: 0; border: none;
-    background: none; cursor: pointer; }
+  input[type=color] { width: 34px; height: 34px; padding: 0; border: none; background: none; cursor: pointer; }
 
-  .toggle { display: inline-flex; background: #0f1620; border: 1px solid var(--line);
-    border-radius: 10px; overflow: hidden; }
+  .toggle { display: inline-flex; background: #0f1620; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .toggle button { appearance: none; border: none; background: transparent; color: #c8d3de;
     padding: 10px 14px; font-size: 14px; cursor: pointer; font-weight: 600; }
   .toggle button.on { background: var(--accent); color: #10161f; }
@@ -83,38 +68,30 @@
 
   .roomrow { display: flex; gap: 8px; }
   .roomrow input { flex: 1; text-transform: uppercase; }
-  .btn { appearance: none; border: none; cursor: pointer; border-radius: 10px;
-    font-weight: 700; font-size: 14px; }
-  .btn.ghost { background: #16202c; color: #cdd8e2; border: 1px solid var(--line);
-    padding: 0 14px; }
+  .btn { appearance: none; border: none; cursor: pointer; border-radius: 10px; font-weight: 700; font-size: 14px; }
+  .btn.ghost { background: #16202c; color: #cdd8e2; border: 1px solid var(--line); padding: 0 14px; }
   .btn.big { width: 100%; padding: 15px; font-size: 17px; margin-top: 6px;
     background: linear-gradient(180deg, #ffc25c, var(--accent)); color: #10161f; }
   .btn.big:disabled { opacity: 0.55; cursor: default; }
   .sharehint { font-size: 12.5px; color: #8496a6; margin-top: 6px; }
   .err { color: #ff8b7a; font-size: 13px; min-height: 18px; margin-top: 6px; }
 
-  /* ---------- In-game HUD ---------- */
+  /* ---------- HUD ---------- */
   .hud { position: fixed; z-index: 10; pointer-events: none; }
   #players { top: 14px; left: 14px; display: flex; flex-direction: column; gap: 6px; }
   .pchip { display: flex; align-items: center; gap: 8px; background: var(--panel);
-    border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: 13px;
-    backdrop-filter: blur(6px); }
+    border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: 13px; backdrop-filter: blur(6px); }
   .pdot { width: 12px; height: 12px; border-radius: 3px; }
   #status { top: 14px; right: 14px; font-size: 12.5px; color: #9fb0c0;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-    padding: 6px 12px; backdrop-filter: blur(6px); }
-  #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-    background: var(--good); margin-right: 6px; vertical-align: middle; }
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; backdrop-filter: blur(6px); }
+  #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin-right: 6px; vertical-align: middle; }
   #status.bad .dot { background: #ff6b5b; }
-  #hint { bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 12.5px;
-    color: #93a4b5; background: var(--panel); border: 1px solid var(--line);
-    border-radius: 999px; padding: 7px 14px; backdrop-filter: blur(6px); }
-  #warn { top: 20%; left: 50%; transform: translateX(-50%); font-size: 16px;
-    font-weight: 700; color: #10161f; background: #ff6b5b; padding: 10px 18px;
-    border-radius: 10px; display: none; }
+  #hint { bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 12.5px; color: #93a4b5;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; backdrop-filter: blur(6px); text-align:center; }
+  #warn { top: 18%; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 700;
+    color: #10161f; background: #ff6b5b; padding: 10px 18px; border-radius: 10px; display: none; }
 
-  #fullMsg { position: fixed; inset: 0; z-index: 30; display: none;
-    align-items: center; justify-content: center; background: rgba(8,12,18,0.9); }
+  #fullMsg { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; background: rgba(8,12,18,0.9); }
   #fullMsg .card { text-align: center; max-width: 420px; }
 </style>
 </head>
@@ -125,53 +102,30 @@
 <div id="lobby">
   <div class="card">
     <div class="title"><h1>Vanbound</h1><span class="badge">CO-OP</span></div>
-    <p class="subtitle">Build your van, share the link, and explore the city &amp; countryside together. Watch your fuel — the map stays fogged until you drive it.</p>
+    <p class="subtitle">Build your van, share the link, and explore a big city &amp; countryside together. Grab coins, haul supply trailers to drop zones for cash, and keep an eye on fuel — refills cost coins.</p>
 
     <div class="grid">
       <div>
-        <label class="field">
-          <span>Player name</span>
-          <input id="nameInput" type="text" maxlength="16" placeholder="e.g. Rusty" />
-        </label>
-
-        <label class="field">
-          <span>Van color</span>
-          <div class="swatches" id="swatches"></div>
-        </label>
-
-        <label class="field">
-          <span>Body length</span>
+        <label class="field"><span>Player name</span>
+          <input id="nameInput" type="text" maxlength="16" placeholder="e.g. Rusty" /></label>
+        <label class="field"><span>Van color</span>
+          <div class="swatches" id="swatches"></div></label>
+        <label class="field"><span>Body length</span>
           <div class="toggle" id="lengthToggle">
-            <button data-v="short" class="on">Short</button>
-            <button data-v="long">Long</button>
-          </div>
-        </label>
-
-        <label class="field">
-          <span>Rear tires</span>
+            <button data-v="short" class="on">Short</button><button data-v="long">Long</button></div></label>
+        <label class="field"><span>Rear tires</span>
           <div class="toggle" id="tiresToggle">
-            <button data-v="4x4" class="on">4×4</button>
-            <button data-v="dualy">Dualy</button>
-          </div>
-        </label>
-
-        <label class="field">
-          <span>Pack in the back</span>
+            <button data-v="4x4" class="on">4×4</button><button data-v="dualy">Dualy</button></div></label>
+        <label class="field"><span>Pack in the back</span>
           <div class="toggle" id="extraToggle">
-            <button data-v="spare" class="on">Spare tire</button>
-            <button data-v="fuel">Extra fuel</button>
-          </div>
-        </label>
+            <button data-v="spare" class="on">Spare tire</button><button data-v="fuel">Extra fuel</button></div></label>
       </div>
-
       <div>
         <div class="preview-wrap">
           <canvas id="previewCanvas" width="380" height="420"></canvas>
           <div class="preview-note">live preview</div>
         </div>
-
-        <label class="field" style="margin-top:16px">
-          <span>Room code (share to play together)</span>
+        <label class="field" style="margin-top:16px"><span>Room code (share to play together)</span>
           <div class="roomrow">
             <input id="roomInput" type="text" maxlength="12" />
             <button class="btn ghost" id="copyBtn" type="button">Copy link</button>
@@ -180,13 +134,12 @@
         </label>
       </div>
     </div>
-
     <button class="btn big" id="startBtn">Hit the road</button>
     <div class="err" id="lobbyErr"></div>
   </div>
 </div>
 
-<!-- ============ ROOM FULL ============ -->
+<!-- ============ ROOM FULL / DISCONNECT ============ -->
 <div id="fullMsg">
   <div class="card">
     <div class="title" style="justify-content:center"><h1>Room's full</h1></div>
@@ -198,28 +151,20 @@
 <!-- ============ HUD ============ -->
 <div class="hud" id="players"></div>
 <div class="hud" id="status"><span class="dot"></span><span id="statusText">connecting…</span></div>
-<div class="hud" id="hint">Arrows / WASD to drive · H to honk · pull into a ⛽ to refuel</div>
-<div class="hud" id="warn">OUT OF FUEL — coast to a fuel station ⛽</div>
+<div class="hud" id="hint">Arrows / WASD drive · hold <b>F</b> in a ⛽ to fuel (25 coins) · hold <b>T</b> to hitch/drop a trailer · <b>H</b> horn</div>
+<div class="hud" id="warn">OUT OF FUEL — grab coins &amp; get to a ⛽</div>
 
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script type="module">
 
 /* =====================================================================
-   CONFIG
-   ===================================================================== */
-const PALETTE = ["#e84b3c","#f39c12","#f1c40f","#2ecc71","#1abc9c",
-                 "#3498db","#5b6bf0","#9b59b6","#e84393","#ecf0f1","#34495e","#8d6748"];
-
-/* =====================================================================
-   SMALL HELPERS
+   HELPERS
    ===================================================================== */
 const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
 const lerp = (a,b,t) => a + (b - a) * t;
 function lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(Math.PI*2))-Math.PI; return a+d*t; }
-
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
   t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-
 function shade(hex, pct){
   hex = (hex||"#888").replace("#","");
   if (hex.length===3) hex = hex.split("").map(c=>c+c).join("");
@@ -229,141 +174,202 @@ function shade(hex, pct){
   return `rgb(${r},${g},${b})`;
 }
 function roundRect(ctx,x,y,w,h,r){
-  r = Math.min(r, w/2, h/2);
+  r = Math.min(r, Math.abs(w)/2, Math.abs(h)/2);
   ctx.beginPath();
-  ctx.moveTo(x+r,y);
-  ctx.arcTo(x+w,y,x+w,y+h,r);
-  ctx.arcTo(x+w,y+h,x,y+h,r);
-  ctx.arcTo(x,y+h,x,y,r);
-  ctx.arcTo(x,y,x+w,y,r);
-  ctx.closePath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
 }
+
+const PALETTE = ["#e84b3c","#f39c12","#f1c40f","#2ecc71","#1abc9c",
+                 "#3498db","#5b6bf0","#9b59b6","#e84393","#ecf0f1","#34495e","#8d6748"];
 
 /* =====================================================================
    WORLD / MAP  (deterministic — every client builds an identical map)
+   4× the old area. City block of filled buildings + open countryside
+   with curved roads, a drivable-around pond, foliage, fuel stations,
+   a trailer depot, and delivery drop-zones.
    ===================================================================== */
-const WORLD_W = 3200, WORLD_H = 2000;
-const CITY_EDGE = 2060;               // x < this is city, beyond is country
-const rng = mulberry32(1337);
+const WORLD_W = 6400, WORLD_H = 4000;
+const rng = mulberry32(24);
 
-const roads = [];
-// City grid — vertical streets
-[180,480,780,1080,1380,1680,1980].forEach(x => roads.push({x, y:0, w:64, h:WORLD_H, hwy:false}));
-// City grid — horizontal streets
-[180,480,1080,1380,1680].forEach(y => roads.push({x:0, y, w:CITY_EDGE, h:64, hwy:false}));
-// The main highway runs the full width, connecting city to country
-roads.push({x:0, y:780, w:WORLD_W, h:64, hwy:true});
-// A country loop
-roads.push({x:2620, y:300, w:60, h:1180, hwy:false});
-roads.push({x:2200, y:1420, w:1000, h:60, hwy:false});
+// City occupies a sub-rectangle; the rest is countryside.
+const CITY = { x0: 180, y0: 180, x1: 3560, y1: 2680 };
 
-function overlapsRoad(x,y,w,h,margin=18){
+// --- roads (visual + drivable; only buildings/pond/edges collide) ---
+const roads = [];        // straight rects
+const roadCurves = [];   // {x0,y0,cx,cy,x1,y1,w}
+const stepX = 484, stepY = 470, roadW = 76;
+const vxs = [], hys = [];
+for (let x = CITY.x0; x <= CITY.x1 + 1; x += stepX) vxs.push(Math.round(x));
+for (let y = CITY.y0; y <= CITY.y1 + 1; y += stepY) hys.push(Math.round(y));
+vxs.forEach(x => roads.push({ x: x - roadW/2, y: CITY.y0 - roadW, w: roadW, h: (CITY.y1 - CITY.y0) + 2*roadW }));
+hys.forEach(y => roads.push({ x: CITY.x0 - roadW, y: y - roadW/2, w: (CITY.x1 - CITY.x0) + 2*roadW, h: roadW }));
+// world-spanning highways
+roads.push({ x: 0, y: 1360 - 40, w: WORLD_W, h: 80, hwy: true });
+roads.push({ x: 1836 - 40, y: 0, w: 80, h: WORLD_H, hwy: true });
+// curved country roads
+roadCurves.push({ x0:3560, y0:1360, cx:4400, cy:820,  x1:5300, y1:1420, w:72 });
+roadCurves.push({ x0:5300, y0:1420, cx:6050, cy:2050, x1:5250, y1:2900, w:72 });
+roadCurves.push({ x0:1836, y0:3000, cx:2700, cy:3320, x1:3700, y1:3120, w:72 });
+roadCurves.push({ x0:3700, y0:3120, cx:4700, cy:3020, x1:5250, y1:2900, w:72 });
+roadCurves.push({ x0:600,  y0:2900, cx:900,  cy:3400, x1:1836, y1:3300, w:70 });
+
+function overlapsStraightRoad(x, y, w, h, m=14){
   for (const r of roads){
-    if (x < r.x+r.w+margin && x+w > r.x-margin && y < r.y+r.h+margin && y+h > r.y-margin) return true;
+    if (x < r.x+r.w+m && x+w > r.x-m && y < r.y+r.h+m && y+h > r.y-m) return true;
   }
   return false;
 }
 
-// Buildings (these collide). City is packed; country gets a barn + silo.
-let buildings = [];
-const bColors = ["#5a6472","#6b7280","#7a8290","#586074","#647089","#526a7a"];
-for (let gx=52; gx<CITY_EDGE-90; gx+=104){
-  for (let gy=52; gy<WORLD_H-90; gy+=104){
-    if (rng() < 0.12) continue;                // parks / empty lots
-    const w = 54 + rng()*46, h = 54 + rng()*46;
-    const bx = gx + rng()*16, by = gy + rng()*16;
-    if (overlapsRoad(bx,by,w,h,12)) continue;
-    buildings.push({ x:bx, y:by, w, h, color: bColors[(rng()*bColors.length)|0], roof: rng()<0.5 });
+// --- pond (collidable — drive AROUND it) ---
+const pond = { x: 4780, y: 2470, r: 440 };
+function inPond(x, y, pad=0){ const dx=x-pond.x, dy=y-pond.y, r=pond.r+pad; return dx*dx+dy*dy < r*r; }
+
+// --- buildings: fill each city block ---
+const buildings = [];
+const bColors = ["#5a6472","#6b7280","#7a8290","#586074","#647089","#526a7a","#6d6470"];
+const trees = [];
+function fillBlock(x0, y0, x1, y1){
+  const bw = x1 - x0, bh = y1 - y0;
+  if (bw < 46 || bh < 46) return;
+  if (rng() < 0.12){ // leave as a little park
+    const n = 3 + (rng()*4|0);
+    for (let k=0;k<n;k++) trees.push({ x:x0+8+rng()*(bw-16), y:y0+8+rng()*(bh-16), r:13+rng()*10, c: rng()<0.5?"#3f8f4a":"#4fa356", bush:false });
+    return;
+  }
+  const cols = 1 + (rng()*2.4|0), rows = 1 + (rng()*2.4|0), gap = 9;
+  const lw = (bw - (cols-1)*gap)/cols, lh = (bh - (rows-1)*gap)/rows;
+  for (let c=0;c<cols;c++) for (let r=0;r<rows;r++){
+    const lx = x0 + c*(lw+gap), ly = y0 + r*(lh+gap);
+    buildings.push({ x:lx, y:ly, w:lw, h:lh, color: bColors[(rng()*bColors.length)|0], roof: rng()<0.6 });
   }
 }
-// Country structures
-buildings.push({ x:2760, y:470, w:130, h:96, color:"#9c3b30", roof:true, barn:true });
-buildings.push({ x:2915, y:470, w:52, h:52, color:"#b8863f", roof:false, silo:true });
-
-// Decorative (no collision): trees + a pond
-const trees = [];
-for (let i=0;i<90;i++){
-  // scatter through country, plus a few city parks
-  let x, y;
-  if (rng() < 0.75){ x = CITY_EDGE + rng()*(WORLD_W-CITY_EDGE-40)+20; y = 40 + rng()*(WORLD_H-80); }
-  else { x = 40 + rng()*(CITY_EDGE-80); y = 40 + rng()*(WORLD_H-80); }
-  if (overlapsRoad(x-16,y-16,32,32,4)) continue;
-  trees.push({ x, y, r: 12 + rng()*10, c: rng()<0.5 ? "#3f8f4a" : "#4fa356" });
+for (let i=0;i<vxs.length-1;i++) for (let j=0;j<hys.length-1;j++){
+  fillBlock(vxs[i]+roadW/2+8, hys[j]+roadW/2+8, vxs[i+1]-roadW/2-8, hys[j+1]-roadW/2-8);
 }
-const pond = { x:2280, y:1560, w:380, h:250 };
+// country structures (also collide)
+buildings.push({ x:5050, y:900,  w:150, h:110, color:"#9c3b30", roof:true, barn:true });
+buildings.push({ x:5230, y:905,  w:56,  h:56,  color:"#b8863f", silo:true });
+buildings.push({ x:520,  y:2260, w:170, h:120, color:"#41525f", warehouse:true, roof:true }); // depot warehouse
+buildings.push({ x:4200, y:3300, w:150, h:104, color:"#8a4034", roof:true, barn:true });
 
+// --- fuel stations (spread across the bigger map) ---
 const stations = [
-  { x:340,  y:352 },
-  { x:1240, y:600 },
-  { x:760,  y:1240 },
-  { x:2600, y:1000 },
-  { x:2980, y:640 },
+  { x:560,  y:1360 }, { x:1836, y:560 }, { x:3050, y:2050 }, { x:1300, y:2520 },
+  { x:5300, y:1420 }, { x:4980, y:3060 }, { x:3500, y:3350 },
 ];
-const STATION_R = 78;
+const STATION_R = 92;
 
-const SPAWN = { x:300, y:812 };  // on the highway, west edge of town
-
-// Keep fuel stations and the spawn reachable: drop any building that intrudes.
+// keep stations, spawn, and depot clear of buildings
+const SPAWN = { x: 360, y: 1372 };
+const DEPOT = { x: 620, y: 2470 };
 (() => {
-  const zones = stations.map(s => ({ x:s.x, y:s.y, r:STATION_R+26 }))
-                        .concat([{ x:SPAWN.x, y:SPAWN.y, r:70 }]);
-  buildings = buildings.filter(b => !zones.some(z => {
-    const cx = clamp(z.x, b.x, b.x+b.w), cy = clamp(z.y, b.y, b.y+b.h);
-    const dx = z.x-cx, dy = z.y-cy;
-    return dx*dx + dy*dy < z.r*z.r;
-  }));
+  const zones = stations.map(s => ({ x:s.x, y:s.y, r:STATION_R+30 }))
+    .concat([{ x:SPAWN.x, y:SPAWN.y, r:90 }, { x:DEPOT.x, y:DEPOT.y, r:240 }]);
+  for (let i=buildings.length-1;i>=0;i--){
+    const b = buildings[i];
+    if (b.warehouse) continue;
+    const hit = zones.some(z => {
+      const cx = clamp(z.x, b.x, b.x+b.w), cy = clamp(z.y, b.y, b.y+b.h);
+      const dx = z.x-cx, dy = z.y-cy; return dx*dx+dy*dy < z.r*z.r;
+    });
+    if (hit) buildings.splice(i,1);
+  }
 })();
+
+function blockedStatic(x, y, pad=16){
+  if (inPond(x, y, pad)) return true;
+  for (const b of buildings){
+    if (x > b.x-pad && x < b.x+b.w+pad && y > b.y-pad && y < b.y+b.h+pad) return true;
+  }
+  return false;
+}
+
+// --- more foliage across the countryside ---
+(() => {
+  let placed=0, tries=0;
+  while (placed < 320 && tries < 6000){
+    tries++;
+    const x = 30 + rng()*(WORLD_W-60), y = 30 + rng()*(WORLD_H-60);
+    const inCity = x>CITY.x0 && x<CITY.x1 && y>CITY.y0 && y<CITY.y1;
+    if (inCity && rng() < 0.9) continue;              // countryside gets most of it
+    if (overlapsStraightRoad(x-14, y-14, 28, 28, 6)) continue;
+    if (inPond(x, y, 14)) continue;
+    if (blockedStatic(x, y, 6)) continue;
+    const bush = rng() < 0.45;
+    trees.push({ x, y, r: bush ? 8+rng()*6 : 14+rng()*13, c: rng()<0.5?"#3f8f4a":"#4fa356", bush });
+    placed++;
+  }
+})();
+
+// --- coins (each worth 5) ---
+const COIN_VALUE = 5;
+const coins = [];
+(() => {
+  let placed=0, tries=0, id=0;
+  while (placed < 90 && tries < 8000){
+    tries++;
+    const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
+    if (blockedStatic(x, y, 14)) continue;
+    coins.push({ id:"c"+(id++), x, y });
+    placed++;
+  }
+})();
+const takenCoins = new Set();
+const requestedCoins = new Set();   // coins we've already asked the host for
+
+// --- supply trailers (start at the depot) ---
+const TRAILER_LEN = 58, TRAILER_W = 32;
+const trailers = [
+  { id:"t0", x:480, y:2360, angle:0, homeX:480, homeY:2360, towedBy:null, tx:480, ty:2360, tangle:0 },
+  { id:"t1", x:480, y:2560, angle:0, homeX:480, homeY:2560, towedBy:null, tx:480, ty:2560, tangle:0 },
+];
+
+// --- delivery drop-zones: nearest to depot pays 5, +5 for each farther ---
+const dropZones = [ {x:2650,y:620}, {x:3250,y:2450}, {x:5300,y:1420}, {x:5050,y:3120} ]
+  .map(d => ({ ...d, r:130, d2:(d.x-DEPOT.x)**2 + (d.y-DEPOT.y)**2 }))
+  .sort((a,b) => a.d2 - b.d2)
+  .map((d,i) => ({ x:d.x, y:d.y, r:d.r, id:"d"+i, value: COIN_VALUE*(i+1) }));
+// keep drop-zone pads drivable
+for (let i=buildings.length-1;i>=0;i--){ const b=buildings[i]; if (b.warehouse||b.barn||b.silo) continue;
+  if (dropZones.some(z => { const cx=clamp(z.x,b.x,b.x+b.w), cy=clamp(z.y,b.y,b.y+b.h); const dx=z.x-cx, dy=z.y-cy; return dx*dx+dy*dy < (z.r+8)*(z.r+8); })) buildings.splice(i,1);
+}
+
+const HITCH_R = 78, COIN_R = 30;
 
 /* =====================================================================
    VAN DRAWING (shared by lobby preview + world). Van points toward +x.
    ===================================================================== */
-function vanLength(config){ return config.length === "long" ? 78 : 54; }
-
+function vanLength(config){ return config && config.length === "long" ? 78 : 54; }
 function wheel(ctx,cx,cy,len,wid){ roundRect(ctx, cx-len/2, cy-wid/2, len, wid, 3); ctx.fill(); }
-
 function drawVan(ctx, config){
   const L = vanLength(config), W = 30;
-  const color = config.color || "#e84b3c";
+  const color = (config && config.color) || "#e84b3c";
   const dark  = shade(color,-0.4), light = shade(color,0.16);
-
-  // ground shadow
-  ctx.fillStyle = "rgba(0,0,0,0.20)";
-  roundRect(ctx, -L/2+2, -W/2+3, L, W, 9); ctx.fill();
-
-  // wheels (drawn first so body sits on top)
+  ctx.fillStyle = "rgba(0,0,0,0.20)"; roundRect(ctx, -L/2+2, -W/2+3, L, W, 9); ctx.fill();
   ctx.fillStyle = "#141414";
   const rearX = -L/2 + 15, frontX = L/2 - 15;
-  if (config.rearTires === "dualy"){
+  if (config && config.rearTires === "dualy"){
     for (const s of [-1,1]){ wheel(ctx, rearX, s*(W/2+1), 16, 6); wheel(ctx, rearX, s*(W/2+7), 16, 6); }
-  } else { // 4x4 — chunky single
-    for (const s of [-1,1]) wheel(ctx, rearX, s*(W/2+2.5), 19, 10);
-  }
+  } else { for (const s of [-1,1]) wheel(ctx, rearX, s*(W/2+2.5), 19, 10); }
   for (const s of [-1,1]) wheel(ctx, frontX, s*(W/2+1), 13, 6);
-
-  // body
   ctx.fillStyle = color; ctx.strokeStyle = dark; ctx.lineWidth = 2;
   roundRect(ctx, -L/2, -W/2, L, W, 9); ctx.fill(); ctx.stroke();
-  // roof panel for a bit of depth
   ctx.fillStyle = light; roundRect(ctx, -L/2+7, -W/2+5, L-16, W-10, 6); ctx.fill();
-  // windshield + rear window
   ctx.fillStyle = "rgba(186,227,255,0.95)"; roundRect(ctx, L/2-16, -W/2+5, 10, W-10, 3); ctx.fill();
   ctx.fillStyle = "rgba(186,227,255,0.45)"; roundRect(ctx, -L/2+7, -W/2+6, 6, W-12, 3); ctx.fill();
-  // headlights
   ctx.fillStyle = "#fff4bf";
   ctx.beginPath(); ctx.arc(L/2-2,-W/2+5,2.4,0,7); ctx.fill();
   ctx.beginPath(); ctx.arc(L/2-2, W/2-5,2.4,0,7); ctx.fill();
-
-  // rear pack: spare tire OR jerry can
-  if (config.extra === "spare"){
+  if (config && config.extra === "spare"){
     ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(-L/2-5,0,9,0,7); ctx.fill();
     ctx.fillStyle = "#4d4d4d"; ctx.beginPath(); ctx.arc(-L/2-5,0,3.6,0,7); ctx.fill();
-  } else if (config.extra === "fuel"){
+  } else if (config && config.extra === "fuel"){
     ctx.fillStyle = "#c0392b"; roundRect(ctx,-L/2-12,-7,12,14,2); ctx.fill();
     ctx.fillStyle = "#7d2519"; ctx.fillRect(-L/2-9,-9,4,3);
   }
 }
-
-function maxFuelFor(config){ return config.extra === "fuel" ? 160 : 100; }
+function maxFuelFor(config){ return config && config.extra === "fuel" ? 160 : 100; }
 
 /* =====================================================================
    LOBBY
@@ -374,41 +380,29 @@ const roomInput = document.getElementById("roomInput");
 const startBtn = document.getElementById("startBtn");
 const lobbyErr = document.getElementById("lobbyErr");
 const shareHint = document.getElementById("shareHint");
-
 const config = { color: PALETTE[5], length:"short", rearTires:"4x4", extra:"spare" };
 
-// swatches
 const swatchWrap = document.getElementById("swatches");
 PALETTE.forEach(c => {
   const s = document.createElement("div");
   s.className = "swatch" + (c===config.color ? " sel" : "");
   s.style.background = c; s.dataset.c = c;
-  s.onclick = () => { config.color = c; document.querySelectorAll(".swatch").forEach(e=>e.classList.remove("sel")); s.classList.add("sel"); customColor.value = toHex(c); drawPreview(); };
+  s.onclick = () => { config.color = c; document.querySelectorAll(".swatch").forEach(e=>e.classList.remove("sel")); s.classList.add("sel"); drawPreview(); };
   swatchWrap.appendChild(s);
 });
 const customColor = document.createElement("input");
 customColor.type = "color"; customColor.value = "#3498db"; customColor.title = "custom color";
 customColor.oninput = () => { config.color = customColor.value; document.querySelectorAll(".swatch").forEach(e=>e.classList.remove("sel")); drawPreview(); };
 swatchWrap.appendChild(customColor);
-function toHex(c){ // named palette entries are already hex
-  return c.startsWith("#") ? c : "#3498db";
-}
 
-// toggle groups
 function wireToggle(id, key){
   const grp = document.getElementById(id);
   grp.querySelectorAll("button").forEach(btn => {
-    btn.onclick = () => {
-      grp.querySelectorAll("button").forEach(b=>b.classList.remove("on"));
-      btn.classList.add("on"); config[key] = btn.dataset.v; drawPreview();
-    };
+    btn.onclick = () => { grp.querySelectorAll("button").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); config[key] = btn.dataset.v; drawPreview(); };
   });
 }
-wireToggle("lengthToggle","length");
-wireToggle("tiresToggle","rearTires");
-wireToggle("extraToggle","extra");
+wireToggle("lengthToggle","length"); wireToggle("tiresToggle","rearTires"); wireToggle("extraToggle","extra");
 
-// live preview
 const pv = document.getElementById("previewCanvas");
 const pctx = pv.getContext("2d");
 function drawPreview(){
@@ -417,16 +411,11 @@ function drawPreview(){
   pctx.setTransform(dpr,0,0,dpr,0,0);
   const w = pv.clientWidth, h = pv.clientHeight;
   pctx.clearRect(0,0,w,h);
-  pctx.save();
-  pctx.translate(w/2, h/2);
-  pctx.rotate(-Math.PI/2);          // point the van "up"
-  pctx.scale(2.1, 2.1);
-  drawVan(pctx, config);
-  pctx.restore();
+  pctx.save(); pctx.translate(w/2, h/2); pctx.rotate(-Math.PI/2); pctx.scale(2.1, 2.1);
+  drawVan(pctx, config); pctx.restore();
 }
 window.addEventListener("resize", () => { if (lobby.style.display!=="none") drawPreview(); });
 
-// room code + share link
 function randomRoom(){ const a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s=""; for(let i=0;i<4;i++) s+=a[(Math.random()*a.length)|0]; return s; }
 const urlRoom = new URLSearchParams(location.search).get("room");
 roomInput.value = (urlRoom || randomRoom()).toUpperCase();
@@ -437,8 +426,7 @@ document.getElementById("copyBtn").onclick = async () => {
   try { await navigator.clipboard.writeText(shareURL()); document.getElementById("copyBtn").textContent = "Copied!"; setTimeout(()=>document.getElementById("copyBtn").textContent="Copy link",1200); }
   catch { refreshShare(); }
 };
-refreshShare();
-drawPreview();
+refreshShare(); drawPreview();
 
 /* =====================================================================
    GAME STATE
@@ -457,16 +445,17 @@ window.addEventListener("resize", resize); resize();
 let self = null;                       // my van
 const remotes = new Map();             // id -> remote van
 const cam = { x: SPAWN.x, y: SPAWN.y };
-const effects = [];                    // honk rings, etc.
+const rings = [];                      // honk rings
+const floaters = [];                   // "+N" coin popups
 let playing = false;
+let clock = 0;
 
-// Fog of war: one bit per cell, revealed as *I* drive over it.
-const FOG = 80;
+// Fog of war
+const FOG = 120;
 const FCOLS = Math.ceil(WORLD_W/FOG), FROWS = Math.ceil(WORLD_H/FOG);
 const explored = new Uint8Array(FCOLS*FROWS);
 function reveal(x,y){
-  const R = 2;                         // cells around the van
-  const cx = Math.floor(x/FOG), cy = Math.floor(y/FOG);
+  const R = 2, cx = Math.floor(x/FOG), cy = Math.floor(y/FOG);
   for (let j=-R;j<=R;j++) for (let i=-R;i<=R;i++){
     const gx=cx+i, gy=cy+j;
     if (gx<0||gy<0||gx>=FCOLS||gy>=FROWS) continue;
@@ -479,42 +468,32 @@ const keys = new Set();
 const DRIVE_KEYS = new Set(["arrowup","arrowdown","arrowleft","arrowright"," "]);
 addEventListener("keydown", e => {
   const k = e.key.toLowerCase();
-  if (playing && DRIVE_KEYS.has(k)) e.preventDefault();
-  if (k === "h" && playing && !keys.has("h")) honk(true);
+  if (playing && (DRIVE_KEYS.has(k) || k==="f" || k==="t")) e.preventDefault();
+  if (k === "h" && playing && !keys.has("h")) honk();
   keys.add(k);
 });
 addEventListener("keyup", e => keys.delete(e.key.toLowerCase()));
 addEventListener("blur", () => keys.clear());
 
 /* =====================================================================
-   NETWORKING
+   NETWORKING  (PeerJS host/client star; host is world authority)
    ===================================================================== */
 const statusEl = document.getElementById("status");
 const statusText = document.getElementById("statusText");
-
-/* ---------------------------------------------------------------------
-   PEER-TO-PEER NETWORKING (PeerJS, free public broker)
-   The first person to open a room claims a host peer-id derived from the
-   room code and becomes the authority (relays everyone's state, like a
-   tiny server). Everyone else connects to that host. No backend to run.
-   Trade-off: if the host closes the tab, the session ends.
-   --------------------------------------------------------------------- */
 const Peer = window.Peer || (window.peerjs && window.peerjs.Peer);
 
 const net = {
   peer: null, isHost: false, selfId: null,
-  hostConn: null,          // client: connection to the host
-  conns: new Map(),        // host: peerId -> DataConnection
-  roster: {},              // host: authoritative id -> player
-  triedFlip: false,
+  hostConn: null, conns: new Map(), roster: {}, triedFlip: false,
 };
-
-function hostIdFor(room){
-  return "vanbound-v1-" + room.replace(/[^A-Z0-9]/gi, "").toUpperCase() + "-host";
-}
+function hostIdFor(room){ return "vanbound-v2-" + room.replace(/[^A-Z0-9]/gi,"").toUpperCase() + "-host"; }
 function snapshot(){
-  return { id:self.id, name:self.name, config:self.config,
-           x:self.x, y:self.y, angle:self.angle, speed:self.speed||0, fuel:self.fuel };
+  return { id:self.id, name:self.name, config:self.config, x:self.x, y:self.y,
+           angle:self.angle, speed:self.speed||0, fuel:self.fuel, coins:self.coins };
+}
+function worldSnapshot(){
+  return { taken: Array.from(takenCoins),
+           trailers: trailers.map(t => ({ id:t.id, towedBy:t.towedBy, x:t.x, y:t.y, angle:t.angle })) };
 }
 
 startBtn.onclick = () => {
@@ -523,184 +502,190 @@ startBtn.onclick = () => {
   const room = (roomInput.value.trim().toUpperCase() || "MAIN");
   lobbyErr.textContent = "";
   startBtn.disabled = true; startBtn.textContent = "Connecting…";
-
   self = {
-    id: null, name, config: {...config},
-    x: SPAWN.x + (Math.random()*40-20), y: SPAWN.y + (Math.random()*30-15),
+    id:null, name, config:{...config},
+    x: SPAWN.x + (Math.random()*60-30), y: SPAWN.y + (Math.random()*40-20),
     angle: 0, speed: 0, fuel: maxFuelFor(config), maxFuel: maxFuelFor(config),
-    refueling: false,
+    coins: 100, refueling:false, atStation:false, fuelSession:false, fuelMsg:"",
+    tHold:0, tConsumed:false,
   };
   connect(room);
 };
 
 function connect(room){
   const HOST_ID = hostIdFor(room);
-  const p = new Peer(HOST_ID);              // try to BECOME the host
+  const p = new Peer(HOST_ID);
   net.peer = p;
   p.on("open", () => {
     net.isHost = true; net.selfId = HOST_ID; self.id = HOST_ID;
     net.roster[HOST_ID] = snapshot();
-    setStatus(true);
-    p.on("connection", onHostConnection);
-    beginGame();
+    setStatus(true); p.on("connection", onHostConnection); beginGame();
   });
   p.on("error", (err) => {
-    if (err && err.type === "unavailable-id"){
-      try { p.destroy(); } catch {}
-      joinAsClient(room, HOST_ID);          // someone else already hosts
-    } else if (!playing){
-      startBtn.disabled = false; startBtn.textContent = "Hit the road";
-      lobbyErr.textContent = "Connection trouble (" + ((err && err.type) || "unknown") + "). Try again.";
-    }
+    if (err && err.type === "unavailable-id"){ try { p.destroy(); } catch {} joinAsClient(room, HOST_ID); }
+    else if (!playing){ startBtn.disabled=false; startBtn.textContent="Hit the road";
+      lobbyErr.textContent = "Connection trouble ("+((err&&err.type)||"unknown")+"). Try again."; }
   });
 }
-
 function joinAsClient(room, HOST_ID){
-  const p = new Peer();                      // random id from the broker
+  const p = new Peer();
   net.peer = p; net.isHost = false;
   p.on("open", (id) => {
     net.selfId = id; self.id = id;
-    const conn = p.connect(HOST_ID, { reliable: true });
+    const conn = p.connect(HOST_ID, { reliable:true });
     net.hostConn = conn;
-    conn.on("open", () => {
-      setStatus(true);
-      conn.send({ type:"join", player: snapshot() });
-      beginGame();
-    });
+    conn.on("open", () => { setStatus(true); conn.send({ type:"join", player: snapshot() }); beginGame(); });
     conn.on("data", (m) => applyIncoming(m));
     conn.on("close", () => { setStatus(false); if (playing) showDisconnected("The host left — this session has ended."); });
     conn.on("error", () => {});
   });
   p.on("error", (err) => {
     if (err && err.type === "peer-unavailable" && !net.triedFlip){
-      net.triedFlip = true; try { p.destroy(); } catch {}
-      setTimeout(() => connect(room), 500);  // host vanished — try to take over
-    } else if (!playing){
-      startBtn.disabled = false; startBtn.textContent = "Hit the road";
-      lobbyErr.textContent = "Couldn't reach the host. Ask them to open the room first, then retry.";
-    }
+      net.triedFlip = true; try { p.destroy(); } catch {} setTimeout(() => connect(room), 500);
+    } else if (!playing){ startBtn.disabled=false; startBtn.textContent="Hit the road";
+      lobbyErr.textContent = "Couldn't reach the host. Ask them to open the room first, then retry."; }
   });
 }
 
-/* ---- host: an incoming client connection ---- */
 function onHostConnection(conn){
   conn.on("data", (m) => hostHandle(conn, m));
   conn.on("close", () => {
     net.conns.delete(conn.peer);
-    if (net.roster[conn.peer]){
-      delete net.roster[conn.peer];
-      hostBroadcast({ type:"left", id: conn.peer });
-      applyIncoming({ type:"left", id: conn.peer });
-    }
+    // drop any trailer this player was towing
+    for (const tr of trailers){ if (tr.towedBy === conn.peer) hostDropTrailer(tr.id, conn.peer, tr.tx, tr.ty, tr.tangle); }
+    if (net.roster[conn.peer]){ delete net.roster[conn.peer]; hostBroadcast({type:"left", id:conn.peer}); applyIncoming({type:"left", id:conn.peer}); }
   });
   conn.on("error", () => {});
 }
-
 function hostHandle(conn, m){
   if (m.type === "join"){
     if (!net.roster[conn.peer] && Object.keys(net.roster).length >= 4){
       try { conn.send({ type:"full" }); } catch {}
-      setTimeout(() => { try { conn.close(); } catch {} }, 250);
-      return;
+      setTimeout(() => { try { conn.close(); } catch {} }, 250); return;
     }
     net.conns.set(conn.peer, conn);
     const player = { ...m.player, id: conn.peer };
     net.roster[conn.peer] = player;
-    conn.send({ type:"welcome", id: conn.peer, players: net.roster });
+    conn.send({ type:"welcome", id:conn.peer, players: net.roster, world: worldSnapshot() });
     hostBroadcast({ type:"player", player }, conn.peer);
     applyIncoming({ type:"player", player });
   } else if (m.type === "update"){
     const p = net.roster[conn.peer]; if (!p) return;
     Object.assign(p, m.state);
-    hostBroadcast({ type:"state", id: conn.peer, ...m.state }, conn.peer);
-    applyIncoming({ type:"state", id: conn.peer, ...m.state });
+    hostBroadcast({ type:"state", id:conn.peer, ...m.state }, conn.peer);
+    applyIncoming({ type:"state", id:conn.peer, ...m.state });
   } else if (m.type === "honk"){
-    hostBroadcast({ type:"honk", id: conn.peer }, conn.peer);
-    applyIncoming({ type:"honk", id: conn.peer });
+    hostBroadcast({ type:"honk", id:conn.peer }, conn.peer); applyIncoming({ type:"honk", id:conn.peer });
+  } else if (m.type === "grab"){ hostGrabCoin(m.id, conn.peer);
+  } else if (m.type === "hitch"){ hostHitchTrailer(m.tid, conn.peer);
+  } else if (m.type === "drop"){ hostDropTrailer(m.tid, conn.peer, m.x, m.y, m.angle); }
+}
+function hostBroadcast(msg, exceptId){ for (const [pid,c] of net.conns){ if (pid===exceptId) continue; try { c.send(msg); } catch {} } }
+
+/* world-authoritative actions (host only) */
+function hostGrabCoin(id, by){
+  if (takenCoins.has(id)) return;
+  const msg = { type:"taken", id, by }; applyTaken(msg); hostBroadcast(msg);
+}
+function hostHitchTrailer(tid, by){
+  const tr = trailers.find(t=>t.id===tid);
+  if (!tr || tr.towedBy) return;
+  if (trailers.some(t=>t.towedBy===by)) return;   // one trailer per van
+  const msg = { type:"trailer", id:tid, towedBy:by, x:tr.x, y:tr.y, angle:tr.angle };
+  applyTrailer(msg); hostBroadcast(msg);
+}
+function hostDropTrailer(tid, by, x, y, angle){
+  const tr = trailers.find(t=>t.id===tid);
+  if (!tr || tr.towedBy !== by) return;
+  const zone = dropZones.find(z => (x-z.x)**2 + (y-z.y)**2 < z.r*z.r);
+  if (zone){
+    const dmsg = { type:"delivered", by, value: zone.value, x: zone.x, y: zone.y };
+    applyDelivered(dmsg); hostBroadcast(dmsg);
+    const tmsg = { type:"trailer", id:tid, towedBy:null, x:tr.homeX, y:tr.homeY, angle:0 };
+    applyTrailer(tmsg); hostBroadcast(tmsg);
+  } else {
+    const tmsg = { type:"trailer", id:tid, towedBy:null, x, y, angle };
+    applyTrailer(tmsg); hostBroadcast(tmsg);
   }
 }
 
-function hostBroadcast(msg, exceptId){
-  for (const [pid, c] of net.conns){
-    if (pid === exceptId) continue;
-    try { c.send(msg); } catch {}
-  }
-}
+/* net outbound helpers (called by game code, host or client) */
+net.sendState = (s) => {
+  if (net.isHost){ const me = net.roster[net.selfId]; if (me) Object.assign(me, s); hostBroadcast({ type:"state", id:net.selfId, ...s }); }
+  else if (net.hostConn && net.hostConn.open){ net.hostConn.send({ type:"update", state:s }); }
+};
+net.sendHonk = () => { if (net.isHost) hostBroadcast({ type:"honk", id:net.selfId }); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"honk" }); };
+net.grabCoin = (id) => { if (net.isHost) hostGrabCoin(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grab", id }); };
+net.hitch = (tid) => { if (net.isHost) hostHitchTrailer(tid, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"hitch", tid }); };
+net.drop = (tid, x, y, angle) => { if (net.isHost) hostDropTrailer(tid, self.id, x, y, angle); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"drop", tid, x, y, angle }); };
 
-/* ---- unified inbound handler (host + client) ---- */
+/* apply state changes locally (both roles) */
+function applyTaken(m){ takenCoins.add(m.id); if (m.by === self.id){ self.coins += COIN_VALUE; const c = coins.find(c=>c.id===m.id); if (c) floaters.push({ x:c.x, y:c.y, t:0, text:"+"+COIN_VALUE, col:"#ffd23f" }); } }
+function applyTrailer(m){
+  const tr = trailers.find(t=>t.id===m.id); if (!tr) return;
+  tr.towedBy = m.towedBy;
+  if (m.towedBy == null){ tr.x=m.x; tr.y=m.y; tr.angle=m.angle; tr.tx=m.x; tr.ty=m.y; tr.tangle=m.angle; }
+}
+function applyDelivered(m){ if (m.by === self.id) self.coins += m.value; floaters.push({ x:m.x, y:m.y, t:0, text:"+"+m.value, col:"#5ee0a0", big:true }); }
+
 function applyIncoming(m){
   if (m.type === "welcome"){
     for (const id in m.players){ if (id !== self.id) upsertRemote(m.players[id]); }
+    if (m.world){ (m.world.taken||[]).forEach(id => takenCoins.add(id)); (m.world.trailers||[]).forEach(applyTrailer); }
     return;
   }
   if (m.type === "full"){ showFull(); return; }
   if (m.type === "player"){ if (m.player.id !== self.id) upsertRemote(m.player); return; }
-  if (m.type === "state"){
-    const r = remotes.get(m.id); if (!r) return;
-    r.x = m.x; r.y = m.y; r.angle = m.angle; r.speed = m.speed; r.fuel = m.fuel;
-    return;
-  }
-  if (m.type === "honk"){ const r = remotes.get(m.id); if (r) effects.push({ x:r.x, y:r.y, t:0 }); return; }
+  if (m.type === "state"){ const r = remotes.get(m.id); if (!r) return;
+    r.x=m.x; r.y=m.y; r.angle=m.angle; r.speed=m.speed; r.fuel=m.fuel; if (typeof m.coins==="number") r.coins=m.coins; return; }
+  if (m.type === "honk"){ const r = remotes.get(m.id); if (r){ rings.push({x:r.x,y:r.y,t:0}); playMariachi(); } return; }
+  if (m.type === "taken"){ applyTaken(m); return; }
+  if (m.type === "trailer"){ applyTrailer(m); return; }
+  if (m.type === "delivered"){ applyDelivered(m); return; }
   if (m.type === "left"){ remotes.delete(m.id); refreshPlayerList(); return; }
 }
-
-/* ---- outbound state (called from the game loop) ---- */
-net.sendState = (state) => {
-  if (net.isHost){
-    const me = net.roster[net.selfId];
-    if (me) Object.assign(me, state);
-    hostBroadcast({ type:"state", id: net.selfId, ...state });
-  } else if (net.hostConn && net.hostConn.open){
-    net.hostConn.send({ type:"update", state });
-  }
-};
-net.sendHonk = () => {
-  if (net.isHost) hostBroadcast({ type:"honk", id: net.selfId });
-  else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"honk" });
-};
-
-function setStatus(ok){
-  statusEl.classList.toggle("bad", !ok);
-  statusText.textContent = ok ? (net.isHost ? "connected · host" : "connected") : "disconnected";
-}
-
 function upsertRemote(p){
   let r = remotes.get(p.id);
   if (!r){ r = { rx:p.x, ry:p.y, rangle:p.angle }; remotes.set(p.id, r); }
-  r.id = p.id; r.name = p.name; r.config = p.config || {};
-  r.x = p.x; r.y = p.y; r.angle = p.angle; r.speed = p.speed||0;
-  r.fuel = p.fuel ?? 100; r.maxFuel = maxFuelFor(r.config);
+  r.id=p.id; r.name=p.name; r.config=p.config||{}; r.x=p.x; r.y=p.y; r.angle=p.angle;
+  r.speed=p.speed||0; r.fuel=p.fuel ?? 100; r.coins=p.coins ?? 0; r.maxFuel=maxFuelFor(r.config);
   refreshPlayerList();
 }
+function showFull(){ document.getElementById("fullMsg").style.display="flex"; try { if (net.peer) net.peer.destroy(); } catch {} }
+function showDisconnected(msg){ const el=document.getElementById("fullMsg"); el.querySelector("h1").textContent="Disconnected"; el.querySelector(".subtitle").textContent=msg; el.style.display="flex"; }
+function setStatus(ok){ statusEl.classList.toggle("bad", !ok); statusText.textContent = ok ? (net.isHost?"connected · host":"connected") : "disconnected"; }
 
-function showFull(){
-  document.getElementById("fullMsg").style.display = "flex";
-  try { if (net.peer) net.peer.destroy(); } catch {}
-}
-function showDisconnected(msg){
-  const el = document.getElementById("fullMsg");
-  el.querySelector("h1").textContent = "Disconnected";
-  el.querySelector(".subtitle").textContent = msg;
-  el.style.display = "flex";
-}
-
-/* honk: local sound + broadcast + own ring */
+/* =====================================================================
+   HORN — mariachi trumpet fanfare (WebAudio)
+   ===================================================================== */
 let audioCtx = null;
-function honk(){
-  effects.push({ x:self.x, y:self.y, t:0 });
-  net.sendHonk();
+function trumpet(freq, at, dur, vol){
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  const lfo = audioCtx.createOscillator(), lg = audioCtx.createGain();
+  o.type = "sawtooth"; o.frequency.value = freq;
+  lfo.type = "sine"; lfo.frequency.value = 6.5; lg.gain.value = freq*0.009;
+  lfo.connect(lg); lg.connect(o.frequency);
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.linearRampToValueAtTime(vol, at+0.02);
+  g.gain.linearRampToValueAtTime(vol*0.85, at+dur*0.6);
+  g.gain.exponentialRampToValueAtTime(0.0001, at+dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(at); o.stop(at+dur+0.03); lfo.start(at); lfo.stop(at+dur+0.03);
+}
+function playMariachi(){
   try {
     audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.type = "square"; o.frequency.value = 300;
-    g.gain.value = 0.06; o.connect(g); g.connect(audioCtx.destination);
-    o.start(); o.frequency.setValueAtTime(300, audioCtx.currentTime);
-    o.frequency.setValueAtTime(240, audioCtx.currentTime+0.09);
-    g.gain.setValueAtTime(0.06, audioCtx.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime+0.22);
-    o.stop(audioCtx.currentTime+0.24);
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const t = audioCtx.currentTime;
+    // "¡Ta-ta-ta-TAA... ta-ta-TAA!"  — arpeggio up then a cheeky tag
+    const mel = [
+      [392,0.00,0.12],[523,0.12,0.12],[659,0.24,0.12],[784,0.36,0.20],
+      [659,0.58,0.11],[523,0.69,0.11],[587,0.82,0.12],[523,0.96,0.30],
+    ];
+    for (const [f,s,d] of mel){ trumpet(f, t+s, d, 0.09); trumpet(f*0.8, t+s, d, 0.05); } // parallel thirds
   } catch {}
 }
+function honk(){ rings.push({ x:self.x, y:self.y, t:0 }); playMariachi(); net.sendHonk(); }
 
 /* =====================================================================
    PLAYER LIST HUD
@@ -710,46 +695,36 @@ function refreshPlayerList(){
   const rows = [];
   const mk = (name,color,you) => `<div class="pchip"><span class="pdot" style="background:${color}"></span>${name}${you?" <span style='color:#8496a6'>(you)</span>":""}</div>`;
   if (self) rows.push(mk(self.name, self.config.color, true));
-  for (const r of remotes.values()) rows.push(mk(r.name || "Traveler", (r.config&&r.config.color)||"#888", false));
+  for (const r of remotes.values()) rows.push(mk(r.name||"Traveler", (r.config&&r.config.color)||"#888", false));
   playersEl.innerHTML = rows.join("");
 }
 
 /* =====================================================================
-   GAME START + LOOP
+   GAME LOOP
    ===================================================================== */
 function beginGame(){
   if (playing) return;
-  playing = true;
-  lobby.style.display = "none";
-  buildMinimap();
-  refreshPlayerList();
-  reveal(self.x, self.y);
+  playing = true; lobby.style.display = "none";
+  buildMinimap(); refreshPlayerList(); reveal(self.x, self.y);
   requestAnimationFrame(loop);
 }
-
-let last = performance.now();
-let sendAcc = 0;
+let last = performance.now(), sendAcc = 0;
 function loop(now){
-  const dt = Math.min((now - last)/1000, 0.05); last = now;
-  const f = dt * 60;                    // frame-normalized factor
-  update(dt, f);
-  render();
+  const dt = Math.min((now-last)/1000, 0.05); last = now; clock += dt;
+  const f = dt*60;
+  update(dt, f); render();
   sendAcc += dt;
-  if (sendAcc >= 0.06){
-    sendAcc = 0;
-    net.sendState({ x:self.x, y:self.y, angle:self.angle, speed:self.speed, fuel:self.fuel });
-  }
+  if (sendAcc >= 0.06){ sendAcc = 0; net.sendState({ x:self.x, y:self.y, angle:self.angle, speed:self.speed, fuel:self.fuel, coins:self.coins }); }
   requestAnimationFrame(loop);
 }
 
-/* ---------- collision ---------- */
 const VAN_R = 18;
 function blocked(x,y){
   if (x<VAN_R || y<VAN_R || x>WORLD_W-VAN_R || y>WORLD_H-VAN_R) return true;
+  if (inPond(x,y,VAN_R-4)) return true;
   for (const b of buildings){
     const cx = clamp(x, b.x, b.x+b.w), cy = clamp(y, b.y, b.y+b.h);
-    const dx = x-cx, dy = y-cy;
-    if (dx*dx+dy*dy < VAN_R*VAN_R) return true;
+    const dx = x-cx, dy = y-cy; if (dx*dx+dy*dy < VAN_R*VAN_R) return true;
   }
   return false;
 }
@@ -758,60 +733,81 @@ function update(dt, f){
   const s = self;
   const throttle = (keys.has("arrowup")||keys.has("w")?1:0) - (keys.has("arrowdown")||keys.has("s")?1:0);
   const steer    = (keys.has("arrowright")||keys.has("d")?1:0) - (keys.has("arrowleft")||keys.has("a")?1:0);
-
-  const hasFuel = s.fuel > 0;
-  const MAXSPD = 4.6;
-  const accel  = hasFuel ? 0.16 : 0;
+  const hasFuel = s.fuel > 0, MAXSPD = 4.6;
+  const accel = hasFuel ? 0.16 : 0;
   if (throttle > 0) s.speed += accel*throttle*f;
-  else if (throttle < 0) s.speed += 0.12*throttle*f;   // reverse/brake (works without fuel)
-  s.speed *= Math.pow(0.965, f);                       // rolling friction
+  else if (throttle < 0) s.speed += 0.12*throttle*f;
+  s.speed *= Math.pow(0.965, f);
   s.speed = clamp(s.speed, -MAXSPD*0.5, MAXSPD);
   if (Math.abs(s.speed) < 0.01) s.speed = 0;
-
-  // steering only bites when moving; scales with speed
   if (Math.abs(s.speed) > 0.05){
     const grip = s.config.rearTires === "4x4" ? 0.050 : 0.044;
     s.angle += steer * grip * (s.speed/MAXSPD) * f * (s.speed<0?-1:1);
   }
-
-  // integrate with per-axis collision so you slide along walls
   const vx = Math.cos(s.angle)*s.speed*f, vy = Math.sin(s.angle)*s.speed*f;
   if (!blocked(s.x+vx, s.y)) s.x += vx; else s.speed *= 0.35;
   if (!blocked(s.x, s.y+vy)) s.y += vy; else s.speed *= 0.35;
+  if (throttle !== 0 && hasFuel) s.fuel = Math.max(0, s.fuel - Math.abs(s.speed)*0.006*f - 0.004*f);
 
-  // fuel burn (only while under power, proportional to distance)
-  if (throttle !== 0 && hasFuel){
-    s.fuel = Math.max(0, s.fuel - Math.abs(s.speed)*0.006*f - 0.004*f);
+  // ---- fuel stations: hold F, 25 coins per fill session ----
+  let atStation = false;
+  for (const st of stations){ const dx=s.x-st.x, dy=s.y-st.y; if (dx*dx+dy*dy < STATION_R*STATION_R){ atStation=true; break; } }
+  s.atStation = atStation; s.fuelMsg = "";
+  const wantFuel = atStation && keys.has("f") && s.fuel < s.maxFuel;
+  if (wantFuel && !s.fuelSession){
+    if (s.coins >= 25){ s.coins -= 25; s.fuelSession = true; floaters.push({ x:s.x, y:s.y-30, t:0, text:"-25", col:"#ff9a76" }); }
+    else s.fuelMsg = "Need 25 coins";
+  }
+  if (s.fuelSession){
+    if (atStation && keys.has("f") && s.fuel < s.maxFuel) s.fuel = Math.min(s.maxFuel, s.fuel + 34*dt);
+    else s.fuelSession = false;
+  }
+  s.refueling = s.fuelSession;
+
+  // ---- coin pickups (host decides who actually gets it) ----
+  for (const c of coins){ if (takenCoins.has(c.id) || requestedCoins.has(c.id)) continue;
+    const dx=s.x-c.x, dy=s.y-c.y; if (dx*dx+dy*dy < COIN_R*COIN_R){ requestedCoins.add(c.id); net.grabCoin(c.id); }
   }
 
-  // refuel when parked-ish on a station
-  s.refueling = false;
-  for (const st of stations){
-    const dx = s.x-st.x, dy = s.y-st.y;
-    if (dx*dx+dy*dy < STATION_R*STATION_R){
-      s.refueling = true;
-      s.fuel = Math.min(s.maxFuel, s.fuel + 26*dt);
-      break;
+  // ---- trailer hitch / drop (hold T ~0.35s) ----
+  const myTrailer = trailers.find(t=>t.towedBy===self.id);
+  if (keys.has("t")) s.tHold += dt; else { s.tHold = 0; s.tConsumed = false; }
+  if (!s.tConsumed && s.tHold >= 0.35){
+    s.tConsumed = true;
+    if (myTrailer){ net.drop(myTrailer.id, myTrailer.tx, myTrailer.ty, myTrailer.tangle); }
+    else {
+      let best=null, bd=1e9;
+      for (const tr of trailers){ if (tr.towedBy) continue; const d=(tr.tx-s.x)**2+(tr.ty-s.y)**2; if (d<HITCH_R*HITCH_R && d<bd){ best=tr; bd=d; } }
+      if (best) net.hitch(best.id);
     }
   }
 
   document.getElementById("warn").style.display = (s.fuel<=0 && Math.abs(s.speed)<0.2) ? "block" : "none";
-
   reveal(s.x, s.y);
 
-  // smooth remotes toward last-known network state
+  // remotes easing
   for (const r of remotes.values()){
     r.rx = lerp(r.rx, r.x, Math.min(1, 0.22*f));
     r.ry = lerp(r.ry, r.y, Math.min(1, 0.22*f));
     r.rangle = lerpAngle(r.rangle, r.angle, Math.min(1, 0.22*f));
   }
+  // trailer follow
+  for (const tr of trailers){
+    if (tr.towedBy){
+      let tx,ty,ta,cfg;
+      if (tr.towedBy===self.id){ tx=self.x; ty=self.y; ta=self.angle; cfg=self.config; }
+      else { const r=remotes.get(tr.towedBy); if(!r) continue; tx=r.rx; ty=r.ry; ta=r.rangle; cfg=r.config; }
+      const back = vanLength(cfg)/2 + 12 + TRAILER_LEN/2;
+      tr.tx = lerp(tr.tx, tx - Math.cos(ta)*back, Math.min(1,0.35*f));
+      tr.ty = lerp(tr.ty, ty - Math.sin(ta)*back, Math.min(1,0.35*f));
+      tr.tangle = lerpAngle(tr.tangle, ta, Math.min(1,0.3*f));
+    } else { tr.tx = tr.x; tr.ty = tr.y; tr.tangle = tr.angle; }
+  }
 
-  // camera easing
   cam.x = lerp(cam.x, s.x, Math.min(1,0.12*f));
   cam.y = lerp(cam.y, s.y, Math.min(1,0.12*f));
-
-  // age effects
-  for (let i=effects.length-1;i>=0;i--){ effects[i].t += dt; if (effects[i].t>0.7) effects.splice(i,1); }
+  for (let i=rings.length-1;i>=0;i--){ rings[i].t += dt; if (rings[i].t>0.7) rings.splice(i,1); }
+  for (let i=floaters.length-1;i>=0;i--){ floaters[i].t += dt; if (floaters[i].t>1.1) floaters.splice(i,1); }
 }
 
 /* =====================================================================
@@ -820,181 +816,205 @@ function update(dt, f){
 function render(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   ctx.clearRect(0,0,VW,VH);
-
   const ox = VW/2 - cam.x, oy = VH/2 - cam.y;
-  const viewL = cam.x-VW/2-60, viewR = cam.x+VW/2+60, viewT = cam.y-VH/2-60, viewB = cam.y+VH/2+60;
+  const vL = cam.x-VW/2-70, vR = cam.x+VW/2+70, vT = cam.y-VH/2-70, vB = cam.y+VH/2+70;
+  const vis = (x,y,pad=60) => x>vL-pad && x<vR+pad && y>vT-pad && y<vB+pad;
 
-  ctx.save();
-  ctx.translate(ox, oy);
+  ctx.save(); ctx.translate(ox, oy);
 
-  // ground: city vs country
-  ctx.fillStyle = "#26303c"; ctx.fillRect(0,0,CITY_EDGE,WORLD_H);           // city ground
-  ctx.fillStyle = "#2f6b3f"; ctx.fillRect(CITY_EDGE,0,WORLD_W-CITY_EDGE,WORLD_H); // country
-  // soft blend strip
-  const grad = ctx.createLinearGradient(CITY_EDGE-120,0,CITY_EDGE+120,0);
-  grad.addColorStop(0,"#26303c"); grad.addColorStop(1,"#2f6b3f");
-  ctx.fillStyle = grad; ctx.fillRect(CITY_EDGE-120,0,240,WORLD_H);
-  // world border
-  ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 6; ctx.strokeRect(0,0,WORLD_W,WORLD_H);
+  // ground: countryside grass + city asphalt block
+  ctx.fillStyle = "#2f6b3f"; ctx.fillRect(0,0,WORLD_W,WORLD_H);
+  ctx.fillStyle = "#26303c"; ctx.fillRect(CITY.x0-40, CITY.y0-40, (CITY.x1-CITY.x0)+80, (CITY.y1-CITY.y0)+80);
+  ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 8; ctx.strokeRect(0,0,WORLD_W,WORLD_H);
 
   // pond
-  ctx.fillStyle = "#2b6c8f"; ctx.beginPath();
-  ctx.ellipse(pond.x+pond.w/2, pond.y+pond.h/2, pond.w/2, pond.h/2, 0, 0, 7); ctx.fill();
-  ctx.strokeStyle = "#255c78"; ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = "#2b6c8f"; ctx.beginPath(); ctx.arc(pond.x, pond.y, pond.r, 0, 7); ctx.fill();
+  ctx.strokeStyle = "#255c78"; ctx.lineWidth = 6; ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.beginPath(); ctx.arc(pond.x-pond.r*0.3, pond.y-pond.r*0.3, pond.r*0.5, 0, 7); ctx.fill();
 
-  // roads
+  // straight roads
   for (const r of roads){
-    if (r.x>viewR||r.x+r.w<viewL||r.y>viewB||r.y+r.h<viewT) continue;
-    ctx.fillStyle = "#3a4350";
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    // dashed center line
-    ctx.strokeStyle = "rgba(255,214,120,0.55)"; ctx.lineWidth = 3; ctx.setLineDash([16,16]);
-    ctx.beginPath();
+    if (r.x>vR||r.x+r.w<vL||r.y>vB||r.y+r.h<vT) continue;
+    ctx.fillStyle = "#3a4350"; ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = "rgba(255,214,120,0.5)"; ctx.lineWidth = 3; ctx.setLineDash([16,16]); ctx.beginPath();
     if (r.w > r.h){ ctx.moveTo(r.x, r.y+r.h/2); ctx.lineTo(r.x+r.w, r.y+r.h/2); }
     else { ctx.moveTo(r.x+r.w/2, r.y); ctx.lineTo(r.x+r.w/2, r.y+r.h); }
     ctx.stroke(); ctx.setLineDash([]);
   }
+  // curved roads
+  for (const c of roadCurves){
+    ctx.strokeStyle = "#3a4350"; ctx.lineWidth = c.w; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,214,120,0.5)"; ctx.lineWidth = 3; ctx.setLineDash([16,16]);
+    ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = "butt";
+  }
+
+  // delivery drop-zones
+  for (const z of dropZones){
+    if (!vis(z.x,z.y,z.r)) continue;
+    const pulse = 0.10 + 0.05*Math.sin(clock*2 + z.x);
+    ctx.fillStyle = `rgba(94,224,160,${pulse})`; ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,7); ctx.fill();
+    ctx.strokeStyle = "rgba(94,224,160,0.7)"; ctx.lineWidth = 3; ctx.setLineDash([10,8]); ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "#0d1117"; roundRect(ctx, z.x-46, z.y-16, 92, 32, 8); ctx.globalAlpha=0.7; ctx.fill(); ctx.globalAlpha=1;
+    ctx.fillStyle = "#5ee0a0"; ctx.font = "700 15px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText("DROP +"+z.value, z.x, z.y+1);
+  }
 
   // fuel stations
   for (const st of stations){
-    if (st.x<viewL||st.x>viewR||st.y<viewT||st.y>viewB) continue;
-    ctx.fillStyle = "rgba(255,176,58,0.14)";
-    ctx.beginPath(); ctx.arc(st.x, st.y, STATION_R, 0, 7); ctx.fill();
+    if (!vis(st.x,st.y,STATION_R)) continue;
+    ctx.fillStyle = "rgba(255,176,58,0.14)"; ctx.beginPath(); ctx.arc(st.x, st.y, STATION_R, 0, 7); ctx.fill();
     ctx.fillStyle = "#2b3440"; roundRect(ctx, st.x-34, st.y-26, 68, 52, 8); ctx.fill();
     ctx.fillStyle = "#ffb03a"; roundRect(ctx, st.x-12, st.y-20, 24, 34, 4); ctx.fill();
-    ctx.fillStyle = "#20262e"; ctx.font = "bold 22px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
-    ctx.fillText("⛽", st.x, st.y-2);
+    ctx.fillStyle = "#20262e"; ctx.font = "bold 22px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⛽", st.x, st.y-2);
     ctx.fillStyle="#ffd98a"; ctx.font="600 11px system-ui"; ctx.fillText("FUEL", st.x, st.y+20);
   }
 
   // buildings
   for (const b of buildings){
-    if (b.x>viewR||b.x+b.w<viewL||b.y>viewB||b.y+b.h<viewT) continue;
+    if (b.x>vR||b.x+b.w<vL||b.y>vB||b.y+b.h<vT) continue;
     ctx.fillStyle = "rgba(0,0,0,0.28)"; roundRect(ctx, b.x+3, b.y+4, b.w, b.h, 4); ctx.fill();
     ctx.fillStyle = b.color; roundRect(ctx, b.x, b.y, b.w, b.h, 4); ctx.fill();
     if (b.silo){ ctx.fillStyle="#caa15a"; ctx.beginPath(); ctx.arc(b.x+b.w/2,b.y+b.h/2,b.w/2,0,7); ctx.fill(); }
     else if (b.roof){ ctx.fillStyle = shade(b.color,0.14); roundRect(ctx, b.x+6,b.y+6,b.w-12,b.h-12,3); ctx.fill(); }
   }
 
-  // trees
+  // foliage
   for (const t of trees){
-    if (t.x<viewL||t.x>viewR||t.y<viewT||t.y>viewB) continue;
+    if (!vis(t.x,t.y,t.r)) continue;
     ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.beginPath(); ctx.arc(t.x+2,t.y+3,t.r,0,7); ctx.fill();
     ctx.fillStyle = t.c; ctx.beginPath(); ctx.arc(t.x,t.y,t.r,0,7); ctx.fill();
-    ctx.fillStyle = shade(t.c,0.15); ctx.beginPath(); ctx.arc(t.x-t.r*0.3,t.y-t.r*0.3,t.r*0.45,0,7); ctx.fill();
+    ctx.fillStyle = shade(t.c,0.15); ctx.beginPath(); ctx.arc(t.x-t.r*0.3,t.y-t.r*0.3,t.r*0.42,0,7); ctx.fill();
   }
 
-  // vans — remotes then self on top
+  // coins
+  for (const c of coins){ if (takenCoins.has(c.id) || !vis(c.x,c.y,20)) continue;
+    const bob = Math.sin(clock*4 + c.x*0.05)*2;
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(c.x, c.y+9, 7, 3, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#ffd23f"; ctx.beginPath(); ctx.arc(c.x, c.y+bob, 8, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#c99a17"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#c99a17"; ctx.font = "700 10px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("$", c.x, c.y+bob+0.5);
+  }
+
+  // trailers (draw before vans)
+  for (const tr of trailers){ if (!vis(tr.tx,tr.ty,60)) continue; drawTrailer(tr); }
+
+  // vans (remotes then self)
   for (const r of remotes.values()) drawWorldVan(r.rx, r.ry, r.rangle, r.config||{}, r.name, r.fuel, maxFuelFor(r.config||{}), false);
   drawWorldVan(self.x, self.y, self.angle, self.config, self.name, self.fuel, self.maxFuel, true);
 
-  // honk rings
-  for (const ef of effects){
-    const rad = 20 + ef.t*90, a = 1 - ef.t/0.7;
-    ctx.strokeStyle = `rgba(255,214,120,${a*0.8})`; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(ef.x, ef.y, rad, 0, 7); ctx.stroke();
-  }
+  // rings + floaters
+  for (const ef of rings){ const rad=20+ef.t*90, a=1-ef.t/0.7; ctx.strokeStyle=`rgba(255,214,120,${a*0.8})`; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(ef.x,ef.y,rad,0,7); ctx.stroke(); }
+  for (const fl of floaters){ const a=1-fl.t/1.1; ctx.globalAlpha=Math.max(0,a); ctx.fillStyle=fl.col||"#fff"; ctx.font=(fl.big?"700 22px":"700 16px")+" system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(fl.text, fl.x, fl.y-30-fl.t*40); ctx.globalAlpha=1; }
 
   ctx.restore();
 
   drawMinimap();
-  if (self.refueling) drawRefuelPrompt();
-  drawFuelGauge();
+  if (self.refueling) prompt("⛽ Refueling…", "#52c46a");
+  else if (self.atStation && self.fuel<self.maxFuel) prompt(self.fuelMsg ? "⛽ "+self.fuelMsg : "⛽ Hold F to fuel — 25 coins", self.fuelMsg ? "#ff8b5b" : "#ffb03a");
+  drawStats();
 }
 
 function drawWorldVan(x,y,angle,config,name,fuel,maxFuel,isSelf){
-  ctx.save();
-  ctx.translate(x,y); ctx.rotate(angle);
-  drawVan(ctx, config);
-  ctx.restore();
-
-  // name + floating fuel bar (screen-aligned, still in world space)
-  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-  ctx.font = "600 12px system-ui";
+  ctx.save(); ctx.translate(x,y); ctx.rotate(angle); drawVan(ctx, config); ctx.restore();
+  ctx.textAlign="center"; ctx.textBaseline="alphabetic"; ctx.font="600 12px system-ui";
   const top = y - 34;
-  ctx.fillStyle = "rgba(0,0,0,0.45)";
-  const tw = ctx.measureText(name||"Traveler").width + 12;
-  roundRect(ctx, x-tw/2, top-14, tw, 16, 6); ctx.fill();
-  ctx.fillStyle = isSelf ? "#ffe08a" : "#eef2f6";
-  ctx.fillText(name||"Traveler", x, top-2);
-
-  // fuel bar
-  const bw=34, bh=5, ratio = clamp((fuel||0)/(maxFuel||100),0,1);
-  ctx.fillStyle = "rgba(0,0,0,0.5)"; roundRect(ctx, x-bw/2, top+4, bw, bh, 3); ctx.fill();
-  ctx.fillStyle = ratio>0.5 ? "#52c46a" : ratio>0.2 ? "#f1c40f" : "#ff6b5b";
-  roundRect(ctx, x-bw/2, top+4, bw*ratio, bh, 3); ctx.fill();
+  ctx.fillStyle="rgba(0,0,0,0.45)"; const tw=ctx.measureText(name||"Traveler").width+12; roundRect(ctx, x-tw/2, top-14, tw, 16, 6); ctx.fill();
+  ctx.fillStyle = isSelf ? "#ffe08a" : "#eef2f6"; ctx.fillText(name||"Traveler", x, top-2);
+  const bw=34, bh=5, ratio=clamp((fuel||0)/(maxFuel||100),0,1);
+  ctx.fillStyle="rgba(0,0,0,0.5)"; roundRect(ctx, x-bw/2, top+4, bw, bh, 3); ctx.fill();
+  ctx.fillStyle = ratio>0.5?"#52c46a":ratio>0.2?"#f1c40f":"#ff6b5b"; roundRect(ctx, x-bw/2, top+4, bw*ratio, bh, 3); ctx.fill();
 }
 
-/* ---------- minimap (static terrain pre-rendered, fog + blips live) ---------- */
-const MM_W = 224, MM_H = Math.round(MM_W * WORLD_H/WORLD_W);
+function drawTrailer(tr){
+  const towed = !!tr.towedBy;
+  if (towed){
+    let tx,ty;
+    if (tr.towedBy===self.id){ tx=self.x; ty=self.y; } else { const r=remotes.get(tr.towedBy); if(r){ tx=r.rx; ty=r.ry; } }
+    if (tx!=null){ ctx.strokeStyle="#3a3f47"; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(tr.tx,tr.ty); ctx.lineTo(tx,ty); ctx.stroke(); }
+  }
+  ctx.save(); ctx.translate(tr.tx, tr.ty); ctx.rotate(tr.tangle);
+  const L=TRAILER_LEN, W=TRAILER_W;
+  ctx.fillStyle="rgba(0,0,0,0.22)"; roundRect(ctx,-L/2+2,-W/2+3,L,W,5); ctx.fill();
+  ctx.fillStyle="#111"; for (const ax of [-L/2+14, -L/2+30]) for (const s of [-1,1]) wheel(ctx, ax, s*(W/2+1), 13, 6);
+  ctx.fillStyle="#4a525e"; roundRect(ctx,-L/2,-W/2,L,W,5); ctx.fill();
+  ctx.strokeStyle="#2c333c"; ctx.lineWidth=2; ctx.stroke();
+  // supply crates
+  const crates=[["#b8863f",-L/2+10,-6,16,16],["#9c6f34",-L/2+30,-8,14,18],["#c9a24a",-L/2+8,-W/2+3,14,12]];
+  for (const [col,cx,cy,cw,ch] of crates){ ctx.fillStyle=col; roundRect(ctx,cx,cy,cw,ch,2); ctx.fill(); ctx.strokeStyle="rgba(0,0,0,0.3)"; ctx.lineWidth=1; ctx.stroke(); }
+  // tongue toward the van (+x)
+  ctx.strokeStyle="#3a3f47"; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(L/2,0); ctx.lineTo(L/2+12,0); ctx.stroke();
+  ctx.fillStyle="#2c333c"; ctx.beginPath(); ctx.arc(L/2+12,0,4,0,7); ctx.fill();
+  ctx.restore();
+}
+
+/* ---------- minimap ---------- */
+const MM_W = 240, MM_H = Math.round(MM_W * WORLD_H/WORLD_W);
 const mmCanvas = document.createElement("canvas");
 const mmScale = MM_W/WORLD_W;
 function buildMinimap(){
   mmCanvas.width = MM_W; mmCanvas.height = MM_H;
-  const m = mmCanvas.getContext("2d");
-  const s = mmScale;
-  m.fillStyle = "#26303c"; m.fillRect(0,0,CITY_EDGE*s,MM_H);
-  m.fillStyle = "#2f6b3f"; m.fillRect(CITY_EDGE*s,0,(WORLD_W-CITY_EDGE)*s,MM_H);
-  m.fillStyle = "#2b6c8f"; m.beginPath();
-  m.ellipse((pond.x+pond.w/2)*s,(pond.y+pond.h/2)*s,(pond.w/2)*s,(pond.h/2)*s,0,0,7); m.fill();
-  m.fillStyle = "#4a5563";
-  for (const r of roads) m.fillRect(r.x*s, r.y*s, r.w*s, r.h*s);
-  for (const st of stations){ m.fillStyle="#ffb03a"; m.beginPath(); m.arc(st.x*s, st.y*s, 3, 0, 7); m.fill(); }
+  const m = mmCanvas.getContext("2d"), s = mmScale;
+  m.fillStyle="#2f6b3f"; m.fillRect(0,0,MM_W,MM_H);
+  m.fillStyle="#26303c"; m.fillRect((CITY.x0-40)*s,(CITY.y0-40)*s,((CITY.x1-CITY.x0)+80)*s,((CITY.y1-CITY.y0)+80)*s);
+  m.fillStyle="#2b6c8f"; m.beginPath(); m.arc(pond.x*s, pond.y*s, pond.r*s, 0, 7); m.fill();
+  m.fillStyle="#4a5563"; for (const r of roads) m.fillRect(r.x*s, r.y*s, r.w*s, r.h*s);
+  m.strokeStyle="#4a5563"; m.lineWidth=Math.max(1,72*s); for (const c of roadCurves){ m.beginPath(); m.moveTo(c.x0*s,c.y0*s); m.quadraticCurveTo(c.cx*s,c.cy*s,c.x1*s,c.y1*s); m.stroke(); }
 }
 function drawMinimap(){
   const x0 = VW - MM_W - 14, y0 = VH - MM_H - 14;
   ctx.save();
-  // frame
-  ctx.fillStyle = "rgba(10,15,22,0.85)"; roundRect(ctx, x0-6, y0-6, MM_W+12, MM_H+12, 10); ctx.fill();
-  ctx.strokeStyle = "rgba(255,255,255,0.14)"; ctx.lineWidth = 1; ctx.stroke();
-
-  // clip to map area
+  ctx.fillStyle="rgba(10,15,22,0.85)"; roundRect(ctx, x0-6, y0-6, MM_W+12, MM_H+12, 10); ctx.fill();
+  ctx.strokeStyle="rgba(255,255,255,0.14)"; ctx.lineWidth=1; ctx.stroke();
   roundRect(ctx, x0, y0, MM_W, MM_H, 6); ctx.save(); ctx.clip();
   ctx.drawImage(mmCanvas, x0, y0);
-
-  // fog overlay on unexplored cells
   const cw = MM_W/FCOLS, ch = MM_H/FROWS;
-  ctx.fillStyle = "rgba(9,13,19,0.92)";
-  for (let gy=0; gy<FROWS; gy++) for (let gx=0; gx<FCOLS; gx++){
-    if (!explored[gy*FCOLS+gx]) ctx.fillRect(x0+gx*cw, y0+gy*ch, cw+0.6, ch+0.6);
-  }
-
-  // player blips (always visible so friends can find each other)
-  const blip = (px,py,color,me) => {
-    const bx = x0+px*mmScale, by = y0+py*mmScale;
-    if (me){ ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(bx,by,4.5,0,7); ctx.fill(); }
-    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(bx,by, me?3:3.2, 0,7); ctx.fill();
-  };
+  ctx.fillStyle="rgba(9,13,19,0.92)";
+  for (let gy=0; gy<FROWS; gy++) for (let gx=0; gx<FCOLS; gx++){ if (!explored[gy*FCOLS+gx]) ctx.fillRect(x0+gx*cw, y0+gy*ch, cw+0.6, ch+0.6); }
+  // objective markers (always visible)
+  for (const z of dropZones){ ctx.fillStyle="#5ee0a0"; ctx.beginPath(); ctx.arc(x0+z.x*mmScale, y0+z.y*mmScale, 3.2, 0, 7); ctx.fill(); }
+  for (const st of stations){ ctx.fillStyle="#ffb03a"; ctx.beginPath(); ctx.arc(x0+st.x*mmScale, y0+st.y*mmScale, 2.6, 0, 7); ctx.fill(); }
+  for (const tr of trailers){ ctx.fillStyle="#c9a24a"; ctx.fillRect(x0+tr.tx*mmScale-2, y0+tr.ty*mmScale-2, 4, 4); }
+  const blip=(px,py,color,me)=>{ const bx=x0+px*mmScale, by=y0+py*mmScale; if(me){ ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(bx,by,4.5,0,7); ctx.fill(); } ctx.fillStyle=color; ctx.beginPath(); ctx.arc(bx,by,me?3:3.2,0,7); ctx.fill(); };
   for (const r of remotes.values()) blip(r.rx, r.ry, (r.config&&r.config.color)||"#fff", false);
   blip(self.x, self.y, self.config.color, true);
-
-  ctx.restore(); // clip
-  // label
-  ctx.fillStyle = "rgba(255,255,255,0.7)"; ctx.font = "600 10px system-ui"; ctx.textAlign="left"; ctx.textBaseline="alphabetic";
-  ctx.fillText("MAP", x0+4, y0+13);
+  ctx.restore();
+  ctx.fillStyle="rgba(255,255,255,0.7)"; ctx.font="600 10px system-ui"; ctx.textAlign="left"; ctx.textBaseline="alphabetic"; ctx.fillText("MAP", x0+4, y0+13);
   ctx.restore();
 }
 
-/* ---------- fuel gauge + prompts ---------- */
-function drawFuelGauge(){
-  const w = 200, h = 16, x0 = 16, y0 = VH - 30;
+/* ---------- coins / speed / fuel stat panel + prompt ---------- */
+function drawStats(){
   ctx.textAlign="left"; ctx.textBaseline="alphabetic";
-  ctx.fillStyle = "rgba(10,15,22,0.8)"; roundRect(ctx, x0-8, y0-22, w+16, h+30, 10); ctx.fill();
-  ctx.fillStyle = "#9fb0c0"; ctx.font = "600 11px system-ui"; ctx.fillText("FUEL", x0, y0-8);
-  ctx.fillStyle = "rgba(255,255,255,0.12)"; roundRect(ctx, x0, y0, w, h, 6); ctx.fill();
-  const ratio = clamp(self.fuel/self.maxFuel,0,1);
-  ctx.fillStyle = ratio>0.5 ? "#52c46a" : ratio>0.2 ? "#f1c40f" : "#ff6b5b";
-  roundRect(ctx, x0, y0, w*ratio, h, 6); ctx.fill();
-  ctx.fillStyle = "#dfe7ee"; ctx.font = "600 11px system-ui"; ctx.textAlign="right";
-  ctx.fillText(Math.round(self.fuel) + " / " + self.maxFuel, x0+w, y0-8);
+  const x0 = 16, w = 210;
+  // panel
+  const y0 = VH - 118;
+  ctx.fillStyle="rgba(10,15,22,0.82)"; roundRect(ctx, x0-8, y0-8, w+16, 118, 12); ctx.fill();
+  // coins
+  ctx.fillStyle="#ffd23f"; ctx.beginPath(); ctx.arc(x0+8, y0+10, 8, 0, 7); ctx.fill();
+  ctx.fillStyle="#c99a17"; ctx.font="700 10px system-ui"; ctx.textAlign="center"; ctx.fillText("$", x0+8, y0+13.5);
+  ctx.textAlign="left"; ctx.fillStyle="#ffe08a"; ctx.font="700 20px system-ui"; ctx.fillText(self.coins + " coins", x0+24, y0+17);
+  // speed
+  const mph = Math.round(Math.abs(self.speed)*11);
+  ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText("SPEED", x0, y0+40);
+  ctx.fillStyle="#eef2f6"; ctx.font="700 20px system-ui"; ctx.fillText(mph, x0+2, y0+62);
+  ctx.fillStyle="#8496a6"; ctx.font="600 11px system-ui"; ctx.fillText("mph", x0+ (mph>=10?36:24), y0+62);
+  // little speed bar
+  const sbx=x0+72, sbw=w-72;
+  ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, sbx, y0+50, sbw, 8, 4); ctx.fill();
+  ctx.fillStyle="#4fd1c5"; roundRect(ctx, sbx, y0+50, sbw*clamp(Math.abs(self.speed)/4.6,0,1), 8, 4); ctx.fill();
+  // fuel
+  ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText("FUEL", x0, y0+82);
+  ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, x0, y0+88, w, 14, 6); ctx.fill();
+  const fr=clamp(self.fuel/self.maxFuel,0,1);
+  ctx.fillStyle = fr>0.5?"#52c46a":fr>0.2?"#f1c40f":"#ff6b5b"; roundRect(ctx, x0, y0+88, w*fr, 14, 6); ctx.fill();
+  ctx.fillStyle="#dfe7ee"; ctx.font="600 11px system-ui"; ctx.textAlign="right"; ctx.fillText(Math.round(self.fuel)+" / "+self.maxFuel, x0+w, y0+82); ctx.textAlign="left";
 }
-function drawRefuelPrompt(){
-  const t = "⛽ Refueling…";
-  ctx.font = "700 15px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
-  const w = ctx.measureText(t).width + 28;
-  const x = VW/2, y = VH - 70;
-  ctx.fillStyle = "rgba(82,196,106,0.92)"; roundRect(ctx, x-w/2, y-16, w, 32, 10); ctx.fill();
-  ctx.fillStyle = "#0d1117"; ctx.fillText(t, x, y+1);
+function prompt(text, col){
+  ctx.font="700 15px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  const w=ctx.measureText(text).width+28, x=VW/2, y=VH-70;
+  ctx.fillStyle=col; ctx.globalAlpha=0.94; roundRect(ctx, x-w/2, y-16, w, 32, 10); ctx.fill(); ctx.globalAlpha=1;
+  ctx.fillStyle="#0d1117"; ctx.fillText(text, x, y+1);
 }
 </script>
 </body>
