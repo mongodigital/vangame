@@ -39,6 +39,8 @@
   .title h1 { font-size: 30px; margin: 0; letter-spacing: -0.5px; }
   .title .badge { font-size: 12px; color: #0d1117; background: var(--accent);
     padding: 3px 8px; border-radius: 999px; font-weight: 700; }
+  .clockpill { margin-left: auto; font-size: 13px; font-weight: 700; color: #ffd98a;
+    background: #0f1620; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; letter-spacing: 0.3px; }
   .subtitle { color: #9fb0c0; margin: 0 0 20px; font-size: 14.5px; }
   .grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 22px; }
   @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
@@ -124,7 +126,7 @@
 <!-- ============ LOBBY ============ -->
 <div id="lobby">
   <div class="card">
-    <div class="title"><h1>Vanbound</h1><span class="badge">CO-OP</span></div>
+    <div class="title"><h1>Vanbound</h1><span class="badge">CO-OP</span><span class="clockpill" id="lobbyClock">☀ --:--</span></div>
     <p class="subtitle">Build your van, share the link, and explore a big city &amp; countryside together. Grab coins, haul supply trailers to drop zones for cash, and keep an eye on fuel — refills cost coins.</p>
 
     <div class="grid">
@@ -685,10 +687,10 @@ const floaters = [];                   // "+N" coin popups
 let playing = false;
 let clock = 0;
 
-/* day/night: a full 24-hour clock at 1 real minute per in-game hour (24-min cycle),
-   with summer-solstice daylight (sunrise 05:30, sunset 20:30 ≈ 15h day / 9h night).
+/* day/night: a full 24-hour clock compressed into a 12-minute cycle (30s per in-game hour),
+   with summer-solstice daylight (sunrise 05:30, sunset 20:30 ≈ 15h day / 9h night → 7.5min day / 4.5min night).
    Time comes from the shared wall clock, so every player sees the same time of day. */
-const MIN_PER_HOUR = 60000;                              // 1 in-game hour = 1 real minute
+const MIN_PER_HOUR = 30000;                              // 1 in-game hour = 30 real seconds (12-min full cycle)
 const SUNRISE = 5.5, SUNSET = 20.5, TWILIGHT = 0.75;     // in-game hours
 function inGameHour(){ return (Date.now() / MIN_PER_HOUR) % 24; }   // 0..24
 function nightAmount(){                                   // 0 = full day, 1 = full night
@@ -709,6 +711,15 @@ function drawTimeOfDay(){
   ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.stroke();
   ctx.fillStyle = nite ? "#b9c6ff" : "#ffd98a"; ctx.fillText(label, x, y+1);
 }
+// live in-game time shown in the lobby's info card (updates every second)
+function updateLobbyClock(){
+  const el = document.getElementById("lobbyClock"); if (!el) return;
+  const h = inGameHour(), hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  const nite = nightAmount() > 0.5;
+  el.textContent = (nite ? "☾ " : "☀ ") + String(hh).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
+  el.style.color = nite ? "#b9c6ff" : "#ffd98a";
+}
+updateLobbyClock(); setInterval(updateLobbyClock, 1000);
 
 // Fog of war
 const FOG = 120;
