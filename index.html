@@ -127,9 +127,9 @@
           <input id="nameInput" type="text" maxlength="16" placeholder="e.g. Rusty" /></label>
         <label class="field"><span>Van color</span>
           <div class="swatches" id="swatches"></div></label>
-        <label class="field"><span>Body length</span>
+        <label class="field"><span>Vehicle</span>
           <div class="toggle" id="lengthToggle">
-            <button data-v="short" class="on">Short</button><button data-v="long">Long</button></div></label>
+            <button data-v="short" class="on">Short</button><button data-v="long">Long</button><button data-v="bus">Bus</button></div></label>
         <label class="field"><span>Rear tires</span>
           <div class="toggle" id="tiresToggle">
             <button data-v="4x4" class="on">4×4</button><button data-v="dualy">Dualy</button></div></label>
@@ -437,7 +437,7 @@ function findPath(sx,sy,tx,ty){
 /* =====================================================================
    VAN DRAWING (shared by lobby preview + world). Van points toward +x.
    ===================================================================== */
-function vanLength(config){ return config && config.length === "long" ? 78 : 54; }
+function vanLength(config){ const l = config && config.length; return l === "bus" ? 104 : l === "long" ? 78 : 54; }
 function wheel(ctx,cx,cy,len,wid){ roundRect(ctx, cx-len/2, cy-wid/2, len, wid, 3); ctx.fill(); }
 function drawVan(ctx, config){
   const L = vanLength(config), W = 30;
@@ -455,6 +455,13 @@ function drawVan(ctx, config){
   ctx.fillStyle = light; roundRect(ctx, -L/2+7, -W/2+5, L-16, W-10, 6); ctx.fill();
   ctx.fillStyle = "rgba(186,227,255,0.95)"; roundRect(ctx, L/2-16, -W/2+5, 10, W-10, 3); ctx.fill();
   ctx.fillStyle = "rgba(186,227,255,0.45)"; roundRect(ctx, -L/2+7, -W/2+6, 6, W-12, 3); ctx.fill();
+  if (config && config.length === "bus"){   // row of side windows
+    ctx.fillStyle = "rgba(186,227,255,0.85)";
+    roundRect(ctx, -L/2+15, -W/2+3, L-32, 4, 2); ctx.fill();
+    roundRect(ctx, -L/2+15, W/2-7, L-32, 4, 2); ctx.fill();
+    ctx.fillStyle = dark;
+    const n=6; for (let i=1;i<n;i++){ const mx=-L/2+15 + (L-32)*i/n; ctx.fillRect(mx-0.75, -W/2+3, 1.5, 4); ctx.fillRect(mx-0.75, W/2-7, 1.5, 4); }
+  }
   ctx.fillStyle = "#fff4bf";
   ctx.beginPath(); ctx.arc(L/2-2,-W/2+5,2.4,0,7); ctx.fill();
   ctx.beginPath(); ctx.arc(L/2-2, W/2-5,2.4,0,7); ctx.fill();
@@ -467,6 +474,8 @@ function drawVan(ctx, config){
   }
 }
 function maxFuelFor(config){ return config && config.extra === "fuel" ? 160 : 100; }
+// consumption multiplier by vehicle: short 1x, long 1.1x, bus 1.25x
+function fuelFactor(config){ const l = config && config.length; return l === "bus" ? 1.25 : l === "long" ? 1.1 : 1; }
 
 /* =====================================================================
    LOBBY
@@ -508,7 +517,8 @@ function drawPreview(){
   pctx.setTransform(dpr,0,0,dpr,0,0);
   const w = pv.clientWidth, h = pv.clientHeight;
   pctx.clearRect(0,0,w,h);
-  pctx.save(); pctx.translate(w/2, h/2); pctx.rotate(-Math.PI/2); pctx.scale(2.1, 2.1);
+  const psc = vanLength(config) > 90 ? 1.55 : 2.1;   // shrink so the bus fits
+  pctx.save(); pctx.translate(w/2, h/2); pctx.rotate(-Math.PI/2); pctx.scale(psc, psc);
   drawVan(pctx, config); pctx.restore();
 }
 window.addEventListener("resize", () => { if (lobby.style.display!=="none") drawPreview(); });
@@ -707,7 +717,7 @@ startBtn.onclick = () => {
     x: SPAWN.x + (Math.random()*60-30), y: SPAWN.y + (Math.random()*40-20),
     angle: 0, speed: 0, fuel: maxFuelFor(config), maxFuel: maxFuelFor(config),
     coins: 100, refueling:false, atStation:false, fuelSession:false, fuelMsg:"",
-    tHold:0, tConsumed:false, fuelHold:false,
+    tHold:0, tConsumed:false, fuelHold:false, throttleHold:0, cruise:false,
     waypoints:[], reverseTarget:null, hitchIntent:null, stuckT:0,
   };
   connect(room);
@@ -987,7 +997,13 @@ function update(dt, f){
   const vx = Math.cos(s.angle)*s.speed*f, vy = Math.sin(s.angle)*s.speed*f;
   if (!blocked(s.x+vx, s.y)) s.x += vx; else s.speed *= 0.35;
   if (!blocked(s.x, s.y+vy)) s.y += vy; else s.speed *= 0.35;
-  if (throttle !== 0 && hasFuel) s.fuel = Math.max(0, s.fuel - Math.abs(s.speed)*0.006*f - 0.004*f);
+  // sustained forward throttle (>1s) burns 25% less; consumption scales by vehicle
+  if (throttle > 0) s.throttleHold += dt; else s.throttleHold = 0;
+  s.cruise = s.throttleHold > 1;
+  if (throttle !== 0 && hasFuel){
+    const burn = (Math.abs(s.speed)*0.006*f + 0.004*f) * fuelFactor(s.config) * (s.cruise ? 0.75 : 1);
+    s.fuel = Math.max(0, s.fuel - burn);
+  }
 
   // ---- fuel stations: hold F, 25 coins per fill session ----
   let atStation = false;
@@ -1259,6 +1275,7 @@ function drawStats(){
   const sbx=x0+72, sbw=w-72;
   ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, sbx, y0+50, sbw, 8, 4); ctx.fill();
   ctx.fillStyle="#4fd1c5"; roundRect(ctx, sbx, y0+50, sbw*clamp(Math.abs(self.speed)/4.6,0,1), 8, 4); ctx.fill();
+  if (self.cruise){ ctx.fillStyle="#5ee0a0"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("ECO −25% fuel", x0+w, y0+40); ctx.textAlign="left"; }
   // fuel
   ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText("FUEL", x0, y0+82);
   ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, x0, y0+88, w, 14, 6); ctx.fill();
