@@ -1168,6 +1168,7 @@ chatInput.addEventListener("keydown", e => {
   if (low==="/roomcode" || low==="/room"){ doRoomCode(); return; }
   if (low==="/gift"){ startGift(); return; }
   if (low==="/swap"){ startSwap(); return; }
+  if (low==="/teleport" || low==="/tp"){ startTeleport(); return; }
   if (low==="/controls" || low==="/keys"){ showControls(); return; }
   if (low==="/info" || low==="/help" || low==="/commands"){ showCommandInfo(); return; }
   if (t[0]==="/"){ addSysLine("Unknown command. Type <b>/info</b> to see what's available."); return; }
@@ -1217,6 +1218,7 @@ function showCommandInfo(){
   addSysLine("ℹ️ <b>Chat commands</b> — type one and follow the prompts:");
   addSysLine("&nbsp;&nbsp;<b>/gift</b> — give gold, fuel, or electric to another player");
   addSysLine("&nbsp;&nbsp;<b>/swap</b> — trade a roof or pack item with another player (they must accept)");
+  addSysLine("&nbsp;&nbsp;<b>/teleport</b> — jump to another player");
   addSysLine("&nbsp;&nbsp;<b>/roomcode</b> — show this room's code + join link");
   addSysLine("&nbsp;&nbsp;<b>/controls</b> — show the game controls");
   addSysLine("&nbsp;&nbsp;<b>/info</b> — show this list &nbsp;·&nbsp; <b>/cancel</b> — stop a command in progress");
@@ -1289,6 +1291,27 @@ function applyGift(m){
     else if (m.item==="electric") self.battery = Math.max(0, self.battery - m.amount);
     addSysLine(`🎁 You gave ${fmtAmt(m.amount)} ${itemWord(m.item)} to <b>${esc(m.toName)}</b>.`);
   }
+}
+
+/* ----- /teleport ----- */
+function startTeleport(){
+  const others=otherPlayers();
+  if (!others.length){ addSysLine("No one else here to teleport to."); return; }
+  addSysLine("🌀 <b>Teleport</b> — to who? (reply a number, or <b>/cancel</b>)");
+  others.forEach((r,i)=> addSysLine(`&nbsp;&nbsp;${i+1}. ${esc(r.name||"Traveler")}`));
+  cmd={ active:true, mode:"teleport", step:"target", others };
+}
+function teleportStep(t){
+  const pick=cmd.others[parseInt(t,10)-1]; if (!pick){ addSysLine("Pick a valid number."); return; }
+  const r=remotes.get(pick.id); if (!r){ addSysLine("That player left."); endCmd(); return; }
+  const a=Math.random()*Math.PI*2, d=70;                       // land beside them, not on top
+  self.x = r.x + Math.cos(a)*d; self.y = r.y + Math.sin(a)*d;
+  self.speed=0; self.boost=false; self.waypoints.length=0;
+  if (self.onFoot){ self.parkX = self.x + Math.cos(a)*50; self.parkY = self.y + Math.sin(a)*50; }  // your parked vehicle comes along
+  cam.x=self.x; cam.y=self.y;                                  // snap the camera, no cross-map swoop
+  floaters.push({ x:self.x, y:self.y-34, t:0, text:"🌀", col:"#9ad7ff", big:true });
+  addSysLine(`🌀 Teleported to <b>${esc(r.name||"Traveler")}</b>.`);
+  endCmd();
 }
 
 /* ----- /swap (roof + pack-in-back, requires the other player to accept) ----- */
@@ -1375,6 +1398,7 @@ function handleFlow(t){
   const low=t.toLowerCase();
   if (low==="/cancel"||low==="cancel"){ addSysLine("Cancelled."); endCmd(); return; }
   if (cmd.mode==="gift") giftStep(t);
+  else if (cmd.mode==="teleport") teleportStep(t);
   else if (cmd.mode==="swap") swapStep(t);
   else if (cmd.mode==="swapAccept") acceptStep(t);
 }
