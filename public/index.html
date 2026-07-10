@@ -209,7 +209,7 @@
   <div id="chatBar"><span>💬 Chat</span><span id="chatBadge">0</span></div>
   <div id="chatPanel">
     <div id="chatLog"></div>
-    <input id="chatInput" type="text" maxlength="200" placeholder="Message, or /gift /swap /roomcode …" autocomplete="off" />
+    <input id="chatInput" type="text" maxlength="200" placeholder="Message, or /info for commands …" autocomplete="off" />
   </div>
 </div>
 
@@ -935,8 +935,8 @@ chatInput.addEventListener("keydown", e => {
   if (low==="/roomcode" || low==="/room"){ doRoomCode(); return; }
   if (low==="/gift"){ startGift(); return; }
   if (low==="/swap"){ startSwap(); return; }
-  if (low==="/help" || low==="/commands"){ addSysLine("Commands: <b>/gift</b>, <b>/swap</b>, <b>/roomcode</b>."); return; }
-  if (t[0]==="/"){ addSysLine("Unknown command. Try <b>/gift</b>, <b>/swap</b>, <b>/roomcode</b>."); return; }
+  if (low==="/info" || low==="/help" || low==="/commands"){ showCommandInfo(); return; }
+  if (t[0]==="/"){ addSysLine("Unknown command. Type <b>/info</b> to see what's available."); return; }
   addChatLine(self.name, self.config.color, t); net.sendChat(t);   // normal chat
 });
 chatInput.addEventListener("keyup", e => e.stopPropagation());
@@ -977,6 +977,13 @@ function doRoomCode(){
   const code = CURRENT_ROOM || (roomInput.value||"").toUpperCase() || "MAIN";
   const url = `${location.origin}${location.pathname}?room=${encodeURIComponent(code)}`;
   addSysLine(`🔑 Room code: <b>${esc(code)}</b> &nbsp;·&nbsp; join link: ${esc(url)}`);
+}
+function showCommandInfo(){
+  addSysLine("ℹ️ <b>Chat commands</b> — type one and follow the prompts:");
+  addSysLine("&nbsp;&nbsp;<b>/gift</b> — give gold, fuel, or electric to another player");
+  addSysLine("&nbsp;&nbsp;<b>/swap</b> — trade a roof or pack item with another player (they must accept)");
+  addSysLine("&nbsp;&nbsp;<b>/roomcode</b> — show this room's code + join link");
+  addSysLine("&nbsp;&nbsp;<b>/info</b> — show this list &nbsp;·&nbsp; <b>/cancel</b> — stop a command in progress");
 }
 
 /* ----- /gift ----- */
