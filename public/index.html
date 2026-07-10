@@ -2034,10 +2034,14 @@ function beginGame(){
   requestAnimationFrame(loop);
 }
 let last = performance.now(), sendAcc = 0;
+window.__vgPerf = { u:0, r:0, n:0 };
 function loop(now){
   const dt = Math.min((now-last)/1000, 0.05); last = now; clock += dt;
   const f = dt*60;
-  update(dt, f); processCoinRespawns(); render();
+  const t0=performance.now(); update(dt, f); processCoinRespawns();
+  const t1=performance.now(); render();
+  const t2=performance.now();
+  window.__vgPerf.u=+(t1-t0).toFixed(1); window.__vgPerf.r=+(t2-t1).toFixed(1); window.__vgPerf.n++;
   sendAcc += dt;
   if (sendAcc >= 0.06){ sendAcc = 0; net.sendState({ x:self.x, y:self.y, angle:self.angle, speed:self.speed, fuel:self.fuel, battery:self.battery, coins:self.coins, onFoot:self.onFoot, parkX:self.parkX, parkY:self.parkY, parkAngle:self.parkAngle, held:self.held }); }
   requestAnimationFrame(loop);
@@ -2482,9 +2486,11 @@ function render(){
 
   // ground: terrain chunks (sea, beaches, biomes, hillshaded relief)
   {
+    const tC0=performance.now();
     const c0x=Math.max(0,Math.floor(vL/CHUNK)), c1x=Math.min(Math.ceil(WORLD_W/CHUNK)-1, Math.floor(vR/CHUNK));
     const c0y=Math.max(0,Math.floor(vT/CHUNK)), c1y=Math.min(Math.ceil(WORLD_H/CHUNK)-1, Math.floor(vB/CHUNK));
     for (let cy=c0y; cy<=c1y; cy++) for (let cx=c0x; cx<=c1x; cx++) ctx.drawImage(getChunk(cx,cy), cx*CHUNK, cy*CHUNK);
+    if (window.__vgPerf) window.__vgPerf.chunks=+(performance.now()-tC0).toFixed(1);
   }
   ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 8; ctx.strokeRect(0,0,WORLD_W,WORLD_H);
 
@@ -2710,7 +2716,7 @@ function render(){
     ctx.globalCompositeOperation = "source-over"; ctx.restore();
   }
 
-  drawMinimap();
+  { const tM0=performance.now(); drawMinimap(); if (window.__vgPerf) window.__vgPerf.mini=+(performance.now()-tM0).toFixed(1); }
   // district name popup (GTA-style) just above the minimap
   if (zoneBanner){
     const T_IN=0.45, T_HOLD=2.6, T_OUT=0.9, tt=zoneBanner.t;
