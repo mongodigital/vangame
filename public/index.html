@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Vanbound — co-op van adventure</title>
+<style>
+  :root {
+    --panel: rgba(20, 28, 38, 0.82);
+    --line: rgba(255,255,255,0.12);
+    --accent: #ffb03a;
+    --accent2: #4fd1c5;
+    --good: #52c46a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1117; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #eef2f6; user-select: none;
+  }
+  #game { display: block; position: fixed; inset: 0; }
+
+  /* ---------- Lobby ---------- */
+  #lobby {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(1200px 600px at 70% -10%, #23405e 0%, transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, #2a5a3a 0%, transparent 55%),
+      linear-gradient(160deg, #0e1520, #0b1017);
+    padding: 20px; overflow: auto;
+  }
+  .card {
+    width: min(860px, 100%); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 18px;
+    padding: 26px 28px 30px; box-shadow: 0 30px 80px rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+  }
+  .title { display: flex; align-items: baseline; gap: 12px; margin: 0 0 2px; }
+  .title h1 { font-size: 30px; margin: 0; letter-spacing: -0.5px; }
+  .title .badge { font-size: 12px; color: #0d1117; background: var(--accent);
+    padding: 3px 8px; border-radius: 999px; font-weight: 700; }
+  .clockpill { margin-left: auto; font-size: 13px; font-weight: 700; color: #ffd98a;
+    background: #0f1620; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; letter-spacing: 0.3px; }
+  .subtitle { color: #9fb0c0; margin: 0 0 20px; font-size: 14.5px; }
+  .grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 22px; }
+  @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } }
+
+  label.field { display: block; margin: 0 0 16px; }
+  label.field > span { display: block; font-size: 12.5px; text-transform: uppercase;
+    letter-spacing: 0.6px; color: #93a4b5; margin-bottom: 7px; }
+  input[type=text] { width: 100%; padding: 11px 13px; font-size: 15px; color: #eef2f6;
+    background: #0f1620; border: 1px solid var(--line); border-radius: 10px; }
+  input[type=text]:focus { outline: none; border-color: var(--accent2); }
+
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .swatch { width: 30px; height: 30px; border-radius: 8px; cursor: pointer; border: 2px solid transparent; }
+  .swatch.sel { border-color: #fff; box-shadow: 0 0 0 2px rgba(0,0,0,0.4) inset; }
+  input[type=color] { width: 34px; height: 34px; padding: 0; border: none; background: none; cursor: pointer; }
+
+  .toggle { display: inline-flex; background: #0f1620; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .toggle button { appearance: none; border: none; background: transparent; color: #c8d3de;
+    padding: 10px 14px; font-size: 14px; cursor: pointer; font-weight: 600; }
+  .toggle button.on { background: var(--accent); color: #10161f; }
+
+  .roofslots { display: flex; flex-wrap: wrap; gap: 8px; }
+  .roofslot { display: flex; align-items: center; gap: 6px; }
+  .slotnum { font-size: 11px; color: #93a4b5; background: #0f1620; border: 1px solid var(--line); border-radius: 6px; padding: 3px 7px; font-weight: 700; }
+  .roofsel { background: #0f1620; color: #eef2f6; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 14px; cursor: pointer; }
+  .roofsel:focus { outline: none; border-color: var(--accent2); }
+
+  .preview-wrap { background: linear-gradient(160deg,#101a12,#0e1520);
+    border: 1px solid var(--line); border-radius: 14px; padding: 10px;
+    display: flex; flex-direction: column; align-items: center; }
+  #previewCanvas { width: 100%; height: 210px; }
+  .preview-note { font-size: 12px; color: #8496a6; margin-top: 4px; }
+
+  .roomrow { display: flex; gap: 8px; }
+  .roomrow input { flex: 1; text-transform: uppercase; }
+  .btn { appearance: none; border: none; cursor: pointer; border-radius: 10px; font-weight: 700; font-size: 14px; }
+  .btn.ghost { background: #16202c; color: #cdd8e2; border: 1px solid var(--line); padding: 0 14px; }
+  .btn.big { width: 100%; padding: 15px; font-size: 17px; margin-top: 6px;
+    background: linear-gradient(180deg, #ffc25c, var(--accent)); color: #10161f; }
+  .btn.big:disabled { opacity: 0.55; cursor: default; }
+  .sharehint { font-size: 12.5px; color: #8496a6; margin-top: 6px; }
+  .err { color: #ff8b7a; font-size: 13px; min-height: 18px; margin-top: 6px; }
+  .padnote { font-size: 12px; color: #8fa1b3; line-height: 1.5; margin-top: 10px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+  .padnote b { color: #cddae7; }
+
+  /* ---------- HUD ---------- */
+  .hud { position: fixed; z-index: 10; pointer-events: none; }
+  #players { top: 14px; left: 14px; display: flex; flex-direction: column; gap: 6px; }
+  .pchip { display: flex; align-items: center; gap: 8px; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; font-size: 13px; backdrop-filter: blur(6px); }
+  .pdot { width: 12px; height: 12px; border-radius: 3px; }
+  #status { top: 14px; right: 14px; font-size: 12.5px; color: #9fb0c0;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; backdrop-filter: blur(6px); }
+  #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--good); margin-right: 6px; vertical-align: middle; }
+  #status.bad .dot { background: #ff6b5b; }
+  #hint { bottom: 12px; left: 50%; transform: translateX(-50%); font-size: 12.5px; color: #93a4b5;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; backdrop-filter: blur(6px); text-align:center; }
+  #warn { top: 18%; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: 700;
+    color: #10161f; background: #ff6b5b; padding: 10px 18px; border-radius: 10px; display: none; }
+  #padInd { top: 46px; right: 14px; font-size: 15px; line-height: 1;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; backdrop-filter: blur(6px); }
+  #padToast { position: fixed; z-index: 40; top: 30%; left: 50%; transform: translateX(-50%);
+    font-size: 14px; font-weight: 700; color: #eaf2fb; background: rgba(16,22,31,0.92);
+    border: 1px solid var(--line); border-radius: 10px; padding: 9px 16px; pointer-events: none;
+    opacity: 0; transition: opacity .3s ease; }
+
+  #fullMsg { position: fixed; inset: 0; z-index: 30; display: none; align-items: center; justify-content: center; background: rgba(8,12,18,0.9); }
+  #fullMsg .card { text-align: center; max-width: 420px; }
+
+  /* ---------- text chat ---------- */
+  #chat { left: 14px; bottom: 132px; width: min(300px, 74vw); pointer-events: none; font-size: 13px; }
+  #chatBar { display: inline-flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 7px 12px; cursor: pointer; backdrop-filter: blur(6px); pointer-events: auto; user-select: none; }
+  #chatBadge { display: none; background: #ff6b5b; color: #fff; border-radius: 999px; padding: 0 7px; font-size: 11px; font-weight: 700; }
+  #chatPanel { display: none; flex-direction: column; margin-top: 6px; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; overflow: hidden; backdrop-filter: blur(6px); pointer-events: auto; }
+  #chatLog { height: 150px; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
+  #chatLog .cline { line-height: 1.35; word-break: break-word; }
+  #chatLog .cline.sys { color: #8fd6c4; background: rgba(79,209,197,0.07); border-left: 2px solid #4fd1c5; padding: 2px 8px; margin: 2px 0; border-radius: 3px; }
+  #chatLog .cline.sys b { color: #d6f5ee; }
+  #chatInput { border: none; border-top: 1px solid var(--line); background: #0f1620; color: #eef2f6; padding: 9px 11px; font-size: 14px; outline: none; }
+
+  /* ---------- touch controls ---------- */
+  #touchCtrls { right: 16px; top: 50%; transform: translateY(-50%); display: none; flex-direction: column; gap: 12px; align-items: center; }
+  .tbtn { pointer-events: auto; width: 60px; height: 60px; border-radius: 50%; border: 1px solid var(--line);
+    background: var(--panel); color: #eef2f6; font-size: 22px; font-weight: 700; backdrop-filter: blur(6px); cursor: pointer; touch-action: none; }
+  .tbtn.action { background: linear-gradient(180deg, #ffc25c, var(--accent)); color: #10161f; font-size: 15px; width: 72px; height: 72px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ============ LOBBY ============ -->
+<div id="lobby">
+  <div class="card">
+    <div class="title"><h1>Vanbound</h1><span class="badge">CO-OP</span><span class="clockpill" id="lobbyClock">☀ --:--</span></div>
+    <p class="subtitle">Build your van, share the link, and explore a big city &amp; countryside together. Grab coins, haul supply trailers to drop zones for cash, and keep an eye on fuel — refills cost coins.</p>
+
+    <div class="grid">
+      <div>
+        <label class="field"><span>Player name</span>
+          <input id="nameInput" type="text" maxlength="16" placeholder="e.g. Rusty" /></label>
+        <label class="field"><span>Van color</span>
+          <div class="swatches" id="swatches"></div></label>
+        <label class="field"><span>Vehicle</span>
+          <div class="toggle" id="lengthToggle">
+            <button data-v="short" class="on">Short</button><button data-v="long">Long</button><button data-v="bus">Bus</button></div></label>
+        <label class="field"><span>Rear tires</span>
+          <div class="toggle" id="tiresToggle">
+            <button data-v="4x4" class="on">4×4</button><button data-v="dualy">Dualy</button></div></label>
+        <label class="field"><span>Pack in the back</span>
+          <div class="toggle" id="extraToggle">
+            <button data-v="spare" class="on">Spare tire</button><button data-v="fuel">Extra fuel</button></div></label>
+        <label class="field"><span>Propulsion</span>
+          <div class="toggle" id="propToggle">
+            <button data-v="fuel" class="on">Fuel</button><button data-v="hybrid">Hybrid</button><button data-v="electric">Electric</button></div></label>
+      </div>
+      <div>
+        <div class="preview-wrap">
+          <canvas id="previewCanvas" width="380" height="420"></canvas>
+          <div class="preview-note">live preview</div>
+        </div>
+        <label class="field" style="margin-top:16px"><span>Room code (share to play together)</span>
+          <div class="roomrow">
+            <input id="roomInput" type="text" maxlength="12" />
+            <button class="btn ghost" id="copyBtn" type="button">Copy link</button>
+          </div>
+          <div class="sharehint" id="shareHint"></div>
+        </label>
+      </div>
+    </div>
+    <label class="field" style="margin-top:2px"><span>Roof accessories</span>
+      <div id="roofSlots" class="roofslots"></div></label>
+    <button class="btn big" id="startBtn">Hit the road</button>
+    <div class="padnote" id="padNote">🎮 <b>Bluetooth controller?</b> Pair it to your device, then press any button once it's in-game. <b>RT</b> gas · <b>LT</b> brake/reverse · <b>left stick / d-pad</b> steer · <b>A</b> horn · <b>X</b> hitch/drop (hold) · <b>Y</b> fuel/charge (hold) · <b>LB/RB</b> boost.</div>
+    <div class="err" id="lobbyErr"></div>
+  </div>
+</div>
+
+<!-- ============ ROOM FULL / DISCONNECT ============ -->
+<div id="fullMsg">
+  <div class="card">
+    <div class="title" style="justify-content:center"><h1>Room's full</h1></div>
+    <p class="subtitle" style="margin-bottom:16px">This room already has 4 vans. Try a different room code and share the new link with your crew.</p>
+    <button class="btn big" onclick="location.href=location.pathname">Back to garage</button>
+  </div>
+</div>
+
+<!-- ============ HUD ============ -->
+<div class="hud" id="players"></div>
+<div class="hud" id="status"><span class="dot"></span><span id="statusText">connecting…</span></div>
+<div class="hud" id="hint"><b>Drive:</b> arrows/WASD, <b>controller</b>, or <b>tap</b> where to go · <b>hold</b> a spot to reverse · <b>double-tap + hold ↑</b> to boost · <b>tap your van</b> to horn · <b>triple-tap a trailer</b> to hitch</div>
+<div class="hud" id="warn">OUT OF FUEL — grab coins &amp; get to a ⛽</div>
+<div class="hud" id="padInd" title="Controller connected" style="display:none">🎮</div>
+<div id="padToast"></div>
+
+<!-- touch action buttons (shown on touch devices) -->
+<div class="hud" id="touchCtrls">
+  <button id="btnAction" class="tbtn action" style="display:none">Action</button>
+  <button id="btnHorn" class="tbtn" title="Horn">📣</button>
+</div>
+
+<!-- collapsible chat -->
+<div class="hud" id="chat" style="display:none">
+  <div id="chatBar"><span>💬 Chat</span><span id="chatBadge">0</span></div>
+  <div id="chatPanel">
+    <div id="chatLog"></div>
+    <input id="chatInput" type="text" maxlength="200" placeholder="Message, or /gift /swap /roomcode …" autocomplete="off" />
+  </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="module">
+
+/* =====================================================================
+   HELPERS
+   ===================================================================== */
+const clamp = (v,a,b) => v < a ? a : v > b ? b : v;
+const lerp = (a,b,t) => a + (b - a) * t;
+function lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(Math.PI*2))-Math.PI; return a+d*t; }
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function shade(hex, pct){
+  hex = (hex||"#888").replace("#","");
+  if (hex.length===3) hex = hex.split("").map(c=>c+c).join("");
+  let r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+  const t = pct<0 ? 0 : 255, p = Math.abs(pct);
+  r=Math.round((t-r)*p)+r; g=Math.round((t-g)*p)+g; b=Math.round((t-b)*p)+b;
+  return `rgb(${r},${g},${b})`;
+}
+function roundRect(ctx,x,y,w,h,r){
+  r = Math.min(r, Math.abs(w)/2, Math.abs(h)/2);
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+
+const PALETTE = ["#e84b3c","#f39c12","#f1c40f","#2ecc71","#1abc9c",
+                 "#3498db","#5b6bf0","#9b59b6","#e84393","#ecf0f1","#34495e","#8d6748"];
+
+/* =====================================================================
+   WORLD / MAP  (deterministic — every client builds an identical map)
+   4× the old area. City block of filled buildings + open countryside
+   with curved roads, a drivable-around pond, foliage, fuel stations,
+   a trailer depot, and delivery drop-zones.
+   ===================================================================== */
+const WORLD_W = 6400, WORLD_H = 4000;
+const rng = mulberry32(24);
+
+// City occupies a sub-rectangle; the rest is countryside.
+const CITY = { x0: 180, y0: 180, x1: 3560, y1: 2680 };
+
+// --- roads (visual + drivable; only buildings/pond/edges collide) ---
+const roads = [];        // straight rects
+const roadCurves = [];   // {x0,y0,cx,cy,x1,y1,w}
+const stepX = 484, stepY = 470, roadW = 76;
+const vxs = [], hys = [];
+for (let x = CITY.x0; x <= CITY.x1 + 1; x += stepX) vxs.push(Math.round(x));
+for (let y = CITY.y0; y <= CITY.y1 + 1; y += stepY) hys.push(Math.round(y));
+vxs.forEach(x => roads.push({ x: x - roadW/2, y: CITY.y0 - roadW, w: roadW, h: (CITY.y1 - CITY.y0) + 2*roadW }));
+hys.forEach(y => roads.push({ x: CITY.x0 - roadW, y: y - roadW/2, w: (CITY.x1 - CITY.x0) + 2*roadW, h: roadW }));
+// world-spanning highways
+roads.push({ x: 0, y: 1360 - 40, w: WORLD_W, h: 80, hwy: true });
+roads.push({ x: 1836 - 40, y: 0, w: 80, h: WORLD_H, hwy: true });
+// curved country roads
+roadCurves.push({ x0:3560, y0:1360, cx:4400, cy:820,  x1:5300, y1:1420, w:72 });
+roadCurves.push({ x0:5300, y0:1420, cx:6050, cy:2050, x1:5250, y1:2900, w:72 });
+roadCurves.push({ x0:1836, y0:3000, cx:2700, cy:3320, x1:3700, y1:3120, w:72 });
+roadCurves.push({ x0:3700, y0:3120, cx:4700, cy:3020, x1:5250, y1:2900, w:72 });
+roadCurves.push({ x0:600,  y0:2900, cx:900,  cy:3400, x1:1836, y1:3300, w:70 });
+
+function overlapsStraightRoad(x, y, w, h, m=14){
+  for (const r of roads){
+    if (x < r.x+r.w+m && x+w > r.x-m && y < r.y+r.h+m && y+h > r.y-m) return true;
+  }
+  return false;
+}
+
+// --- pond (collidable — drive AROUND it) ---
+const pond = { x: 4780, y: 2470, r: 440 };
+function inPond(x, y, pad=0){ const dx=x-pond.x, dy=y-pond.y, r=pond.r+pad; return dx*dx+dy*dy < r*r; }
+
+// --- buildings: fill each city block ---
+const buildings = [];
+const bColors = ["#5a6472","#6b7280","#7a8290","#586074","#647089","#526a7a","#6d6470"];
+const trees = [];
+function fillBlock(x0, y0, x1, y1){
+  const bw = x1 - x0, bh = y1 - y0;
+  if (bw < 46 || bh < 46) return;
+  if (rng() < 0.12){ // leave as a little park
+    const n = 3 + (rng()*4|0);
+    for (let k=0;k<n;k++) trees.push({ x:x0+8+rng()*(bw-16), y:y0+8+rng()*(bh-16), r:13+rng()*10, c: rng()<0.5?"#3f8f4a":"#4fa356", bush:false });
+    return;
+  }
+  const cols = 1 + (rng()*2.4|0), rows = 1 + (rng()*2.4|0), gap = 9;
+  const lw = (bw - (cols-1)*gap)/cols, lh = (bh - (rows-1)*gap)/rows;
+  for (let c=0;c<cols;c++) for (let r=0;r<rows;r++){
+    const lx = x0 + c*(lw+gap), ly = y0 + r*(lh+gap);
+    buildings.push({ x:lx, y:ly, w:lw, h:lh, color: bColors[(rng()*bColors.length)|0], roof: rng()<0.6 });
+  }
+}
+for (let i=0;i<vxs.length-1;i++) for (let j=0;j<hys.length-1;j++){
+  fillBlock(vxs[i]+roadW/2+8, hys[j]+roadW/2+8, vxs[i+1]-roadW/2-8, hys[j+1]-roadW/2-8);
+}
+// country structures (also collide)
+buildings.push({ x:5050, y:900,  w:150, h:110, color:"#9c3b30", roof:true, barn:true });
+buildings.push({ x:5230, y:905,  w:56,  h:56,  color:"#b8863f", silo:true });
+buildings.push({ x:520,  y:2260, w:170, h:120, color:"#41525f", warehouse:true, roof:true }); // depot warehouse
+buildings.push({ x:4200, y:3300, w:150, h:104, color:"#8a4034", roof:true, barn:true });
+
+// --- fuel stations (spread across the bigger map) ---
+const stations = [
+  { x:560,  y:1360 }, { x:1836, y:560 }, { x:3050, y:2050 }, { x:1300, y:2520 },
+  { x:5300, y:1420 }, { x:4980, y:3060 }, { x:3500, y:3350 },
+];
+const STATION_R = 92;
+// --- battery chargers (hybrid & electric only) ---
+const chargers = [ { x:2200, y:950 }, { x:3900, y:2200 }, { x:5250, y:700 } ];
+const CHARGER_R = 92;
+
+// keep stations, chargers, spawn, and depot clear of buildings
+const SPAWN = { x: 360, y: 1372 };
+const DEPOT = { x: 620, y: 2470 };
+(() => {
+  const zones = stations.map(s => ({ x:s.x, y:s.y, r:STATION_R+30 }))
+    .concat(chargers.map(c => ({ x:c.x, y:c.y, r:CHARGER_R+30 })))
+    .concat([{ x:SPAWN.x, y:SPAWN.y, r:90 }, { x:DEPOT.x, y:DEPOT.y, r:240 }]);
+  for (let i=buildings.length-1;i>=0;i--){
+    const b = buildings[i];
+    if (b.warehouse) continue;
+    const hit = zones.some(z => {
+      const cx = clamp(z.x, b.x, b.x+b.w), cy = clamp(z.y, b.y, b.y+b.h);
+      const dx = z.x-cx, dy = z.y-cy; return dx*dx+dy*dy < z.r*z.r;
+    });
+    if (hit) buildings.splice(i,1);
+  }
+})();
+
+function blockedStatic(x, y, pad=16){
+  if (inPond(x, y, pad)) return true;
+  for (const b of buildings){
+    if (x > b.x-pad && x < b.x+b.w+pad && y > b.y-pad && y < b.y+b.h+pad) return true;
+  }
+  return false;
+}
+
+// --- more foliage across the countryside ---
+(() => {
+  let placed=0, tries=0;
+  while (placed < 320 && tries < 6000){
+    tries++;
+    const x = 30 + rng()*(WORLD_W-60), y = 30 + rng()*(WORLD_H-60);
+    const inCity = x>CITY.x0 && x<CITY.x1 && y>CITY.y0 && y<CITY.y1;
+    if (inCity && rng() < 0.9) continue;              // countryside gets most of it
+    if (overlapsStraightRoad(x-14, y-14, 28, 28, 6)) continue;
+    if (inPond(x, y, 14)) continue;
+    if (blockedStatic(x, y, 6)) continue;
+    const bush = rng() < 0.45;
+    trees.push({ x, y, r: bush ? 8+rng()*6 : 14+rng()*13, c: rng()<0.5?"#3f8f4a":"#4fa356", bush });
+    placed++;
+  }
+})();
+
+// --- coins (each worth 5) ---
+const COIN_VALUE = 5;
+const coins = [];
+(() => {
+  let placed=0, tries=0, id=0;
+  while (placed < 90 && tries < 8000){
+    tries++;
+    const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
+    if (blockedStatic(x, y, 14)) continue;
+    coins.push({ id:"c"+(id++), x, y });
+    placed++;
+  }
+})();
+const takenCoins = new Set();
+const requestedCoins = new Set();   // coins we've already asked the host for
+
+// --- fuel boosts (restore 25 fuel each; up to 5; respawn like coins) ---
+const FUEL_BOOST_AMOUNT = 25, FUEL_BOOST_COUNT = 5;
+const fuelBoosts = [];
+(() => {
+  let placed=0, tries=0, id=0;
+  while (placed < FUEL_BOOST_COUNT && tries < 4000){ tries++;
+    const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
+    if (blockedStatic(x, y, 14)) continue;
+    fuelBoosts.push({ id:"b"+(id++), x, y }); placed++;
+  }
+})();
+const takenBoosts = new Set(), requestedBoosts = new Set();
+
+// --- electric fills (+1 battery each; 2 on the map; respawn 60s after pickup) ---
+const ELEC_FILL_AMOUNT = 1, ELEC_FILL_COUNT = 2, ELEC_RESPAWN_MS = 60000;
+const elecFills = [];
+(() => {
+  let placed=0, tries=0, id=0;
+  while (placed < ELEC_FILL_COUNT && tries < 4000){ tries++;
+    const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
+    if (blockedStatic(x, y, 14)) continue;
+    elecFills.push({ id:"e"+(id++), x, y }); placed++;
+  }
+})();
+const takenElec = new Set(), requestedElec = new Set();
+
+const COIN_RESPAWN_MS = 30000;      // a picked-up coin/boost respawns 30s later in a new spot
+const coinRespawnQueue = [];        // host only: [{ id, at }]
+let deliverySinceBonus = 0;         // host only: pity counter for the 5× delivery bonus
+function randomDrivablePoint(){
+  for (let i=0;i<250;i++){ const x=80+Math.random()*(WORLD_W-160), y=80+Math.random()*(WORLD_H-160); if (!blockedStatic(x,y,18)) return { x, y }; }
+  return { x:SPAWN.x, y:SPAWN.y };
+}
+
+// --- supply trailers (spawn at random drivable spots; deterministic so every client agrees) ---
+const TRAILER_LEN = 58, TRAILER_W = 32;
+const trailers = [];
+for (let i=0;i<2;i++){
+  let x=SPAWN.x, y=SPAWN.y;
+  for (let tries=0; tries<400; tries++){ const rx=120+rng()*(WORLD_W-240), ry=120+rng()*(WORLD_H-240); if (!blockedStatic(rx,ry,22)){ x=rx; y=ry; break; } }
+  trailers.push({ id:"t"+i, x, y, angle:0, homeX:x, homeY:y, towedBy:null, tx:x, ty:y, tangle:0 });
+}
+
+// --- delivery drop-zones: nearest to depot pays 5, +5 for each farther ---
+const dropZones = [ {x:2650,y:620}, {x:3250,y:2450}, {x:5300,y:1420}, {x:5050,y:3120} ]
+  .map(d => ({ ...d, r:130, d2:(d.x-DEPOT.x)**2 + (d.y-DEPOT.y)**2 }))
+  .sort((a,b) => a.d2 - b.d2)
+  .map((d,i) => ({ x:d.x, y:d.y, r:d.r, id:"d"+i, value: COIN_VALUE*(i+1) }));
+// keep drop-zone pads drivable
+for (let i=buildings.length-1;i>=0;i--){ const b=buildings[i]; if (b.warehouse||b.barn||b.silo) continue;
+  if (dropZones.some(z => { const cx=clamp(z.x,b.x,b.x+b.w), cy=clamp(z.y,b.y,b.y+b.h); const dx=z.x-cx, dy=z.y-cy; return dx*dx+dy*dy < (z.r+8)*(z.r+8); })) buildings.splice(i,1);
+}
+
+const HITCH_R = 78, COIN_R = 30;
+
+/* ---- navigation grid + A* (for tap/click-to-drive) ---- */
+const NAV = 76;
+const NCOLS = Math.ceil(WORLD_W/NAV), NROWS = Math.ceil(WORLD_H/NAV);
+const navBlocked = new Uint8Array(NCOLS*NROWS);
+for (let gy=0; gy<NROWS; gy++) for (let gx=0; gx<NCOLS; gx++)
+  navBlocked[gy*NCOLS+gx] = blockedStatic(gx*NAV+NAV/2, gy*NAV+NAV/2, 26) ? 1 : 0;
+function navIdx(gx,gy){ return gy*NCOLS+gx; }
+function cellOf(x,y){ return [clamp(Math.floor(x/NAV),0,NCOLS-1), clamp(Math.floor(y/NAV),0,NROWS-1)]; }
+function nearestOpen(gx,gy){
+  if (!navBlocked[navIdx(gx,gy)]) return [gx,gy];
+  for (let r=1;r<14;r++) for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++){
+    if (Math.abs(dx)!==r && Math.abs(dy)!==r) continue;
+    const nx=gx+dx, ny=gy+dy;
+    if (nx>=0&&ny>=0&&nx<NCOLS&&ny<NROWS && !navBlocked[navIdx(nx,ny)]) return [nx,ny];
+  }
+  return [gx,gy];
+}
+function clearLine(ax,ay,bx,by){
+  const d=Math.hypot(bx-ax,by-ay), steps=Math.max(1,Math.ceil(d/(NAV*0.5)));
+  for (let i=1;i<steps;i++){ const t=i/steps; if (blockedStatic(ax+(bx-ax)*t, ay+(by-ay)*t, 24)) return false; }
+  return true;
+}
+function smoothPath(pts){
+  if (pts.length<=2) return pts;
+  const out=[pts[0]]; let a=0;
+  while (a<pts.length-1){ let b=pts.length-1; while (b>a+1 && !clearLine(pts[a].x,pts[a].y,pts[b].x,pts[b].y)) b--; out.push(pts[b]); a=b; }
+  return out;
+}
+const DIRS = [[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
+function findPath(sx,sy,tx,ty){
+  let [g0x,g0y]=cellOf(sx,sy); let [g1x,g1y]=cellOf(tx,ty);
+  [g0x,g0y]=nearestOpen(g0x,g0y); [g1x,g1y]=nearestOpen(g1x,g1y);
+  const start=navIdx(g0x,g0y), goal=navIdx(g1x,g1y);
+  if (start===goal) return [{x:tx,y:ty}];
+  const N=NCOLS*NROWS;
+  const came=new Int32Array(N).fill(-1), g=new Float32Array(N).fill(Infinity), fS=new Float32Array(N).fill(Infinity), inOpen=new Uint8Array(N);
+  const hOf=(i)=>{ const ax=i%NCOLS, ay=(i/NCOLS)|0; return Math.hypot(ax-g1x, ay-g1y); };
+  g[start]=0; fS[start]=hOf(start);
+  const open=[start]; inOpen[start]=1; let iter=0, found=false;
+  while (open.length && iter++<24000){
+    let bi=0, bf=Infinity; for (let k=0;k<open.length;k++){ if (fS[open[k]]<bf){ bf=fS[open[k]]; bi=k; } }
+    const cur=open[bi];
+    if (cur===goal){ found=true; break; }
+    open[bi]=open[open.length-1]; open.pop(); inOpen[cur]=0;
+    const cx=cur%NCOLS, cy=(cur/NCOLS)|0;
+    for (const [dx,dy,cost] of DIRS){
+      const nx=cx+dx, ny=cy+dy;
+      if (nx<0||ny<0||nx>=NCOLS||ny>=NROWS) continue;
+      const ni=navIdx(nx,ny);
+      if (navBlocked[ni]) continue;
+      if (dx&&dy && (navBlocked[navIdx(cx+dx,cy)] || navBlocked[navIdx(cx,cy+dy)])) continue;
+      const ng=g[cur]+cost;
+      if (ng<g[ni]){ came[ni]=cur; g[ni]=ng; fS[ni]=ng+hOf(ni); if (!inOpen[ni]){ open.push(ni); inOpen[ni]=1; } }
+    }
+  }
+  if (!found) return null;
+  const cells=[]; let c=goal, guard=0;
+  while (c!==start && c>=0 && guard++<6000){ cells.push(c); c=came[c]; }
+  cells.push(start); cells.reverse();
+  let pts = cells.map(i=>({ x:(i%NCOLS)*NAV+NAV/2, y:((i/NCOLS)|0)*NAV+NAV/2 }));
+  pts = smoothPath(pts);
+  pts[pts.length-1] = { x:tx, y:ty };
+  return pts;
+}
+
+/* =====================================================================
+   VAN DRAWING (shared by lobby preview + world). Van points toward +x.
+   ===================================================================== */
+function vanLength(config){ const l = config && config.length; return l === "bus" ? 104 : l === "long" ? 78 : 54; }
+function wheel(ctx,cx,cy,len,wid){ roundRect(ctx, cx-len/2, cy-wid/2, len, wid, 3); ctx.fill(); }
+function drawVan(ctx, config){
+  const L = vanLength(config), W = 30;
+  const color = (config && config.color) || "#e84b3c";
+  const dark  = shade(color,-0.4), light = shade(color,0.16);
+  ctx.fillStyle = "rgba(0,0,0,0.20)"; roundRect(ctx, -L/2+2, -W/2+3, L, W, 9); ctx.fill();
+  ctx.fillStyle = "#141414";
+  const rearX = -L/2 + 15, frontX = L/2 - 15;
+  if (config && config.rearTires === "dualy"){
+    for (const s of [-1,1]){ wheel(ctx, rearX, s*(W/2+1), 16, 6); wheel(ctx, rearX, s*(W/2+7), 16, 6); }
+  } else { for (const s of [-1,1]) wheel(ctx, rearX, s*(W/2+2.5), 19, 10); }
+  for (const s of [-1,1]) wheel(ctx, frontX, s*(W/2+1), 13, 6);
+  ctx.fillStyle = color; ctx.strokeStyle = dark; ctx.lineWidth = 2;
+  roundRect(ctx, -L/2, -W/2, L, W, 9); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = light; roundRect(ctx, -L/2+7, -W/2+5, L-16, W-10, 6); ctx.fill();
+  ctx.fillStyle = "rgba(186,227,255,0.95)"; roundRect(ctx, L/2-16, -W/2+5, 10, W-10, 3); ctx.fill();
+  ctx.fillStyle = "rgba(186,227,255,0.45)"; roundRect(ctx, -L/2+7, -W/2+6, 6, W-12, 3); ctx.fill();
+  if (config && config.length === "bus"){   // row of side windows
+    ctx.fillStyle = "rgba(186,227,255,0.85)";
+    roundRect(ctx, -L/2+15, -W/2+3, L-32, 4, 2); ctx.fill();
+    roundRect(ctx, -L/2+15, W/2-7, L-32, 4, 2); ctx.fill();
+    ctx.fillStyle = dark;
+    const n=6; for (let i=1;i<n;i++){ const mx=-L/2+15 + (L-32)*i/n; ctx.fillRect(mx-0.75, -W/2+3, 1.5, 4); ctx.fillRect(mx-0.75, W/2-7, 1.5, 4); }
+  }
+  ctx.fillStyle = "#fff4bf";
+  ctx.beginPath(); ctx.arc(L/2-2,-W/2+5,2.4,0,7); ctx.fill();
+  ctx.beginPath(); ctx.arc(L/2-2, W/2-5,2.4,0,7); ctx.fill();
+  if (config && config.extra === "spare"){
+    ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(-L/2-5,0,9,0,7); ctx.fill();
+    ctx.fillStyle = "#4d4d4d"; ctx.beginPath(); ctx.arc(-L/2-5,0,3.6,0,7); ctx.fill();
+  } else if (config && config.extra === "fuel"){
+    ctx.fillStyle = "#c0392b"; roundRect(ctx,-L/2-12,-7,12,14,2); ctx.fill();
+    ctx.fillStyle = "#7d2519"; ctx.fillRect(-L/2-9,-9,4,3);
+  }
+  // roof accessories (sit on the roof, drawn last / on top)
+  const roof = config && config.roof;
+  if (roof && roof.length){
+    const pos = roofSlotPositions(config), n = roofSlots(config);
+    const aw = Math.min(((L-38)/n)*0.86, 24), ah = 18;
+    for (let i=0;i<pos.length;i++){ const id = roof[i]; if (!id || id==="none") continue;
+      ctx.save(); ctx.translate(pos[i], 0); drawAccessory(ctx, id, aw, ah); ctx.restore(); }
+  }
+}
+function maxFuelFor(config){
+  const prop = (config && config.propulsion) || "fuel";
+  if (prop === "electric") return 0;                        // electric has no fuel tank
+  let m = prop === "hybrid" ? 50 : 100;                     // hybrid comes with a 50-unit tank
+  if (config && config.extra === "fuel") m += 60;
+  if (config && config.roof) for (const a of config.roof) if (a === "fuelcan") m += 40;   // each roof fuel can adds +40
+  return m;
+}
+function maxBatteryFor(config){ const p = (config && config.propulsion) || "fuel"; return (p === "hybrid" || p === "electric") ? 10 : 0; }
+function solarPanelsFor(config){ let n = 0; if (config && config.roof) for (const a of config.roof) if (a === "solar") n++; return n; }
+// consumption multiplier by vehicle: short 1x, long 1.1x, bus 1.25x
+function fuelFactor(config){ const l = config && config.length; return l === "bus" ? 1.25 : l === "long" ? 1.1 : 1; }
+
+/* ---- roof accessory slots: short van 1, long van 2, bus 3 ---- */
+function roofSlots(config){ const l = config && config.length; return l === "bus" ? 3 : l === "long" ? 2 : 1; }
+const ACCESSORIES = [
+  { id:"none",     name:"Empty" },
+  { id:"rack",     name:"Roof rack" },
+  { id:"cargo",    name:"Cargo box" },
+  { id:"fuelcan",  name:"Fuel can (+40 fuel)" },
+  { id:"lightbar", name:"Light bar" },
+  { id:"kayak",    name:"Kayak" },
+  { id:"crate",    name:"Supply crate" },
+  { id:"spare",    name:"Spare tire" },
+  { id:"solar",    name:"Solar panel" },
+];
+function roofSlotPositions(config){
+  const L = vanLength(config), n = roofSlots(config);
+  const x0 = -L/2 + 16, x1 = L/2 - 22, zone = x1 - x0;
+  const out = []; for (let i=0;i<n;i++) out.push(x0 + zone*(i+0.5)/n); return out;
+}
+// draw one accessory centered at origin (x = along length, y = across width)
+function drawAccessory(ctx, id, w, h){
+  if (id === "rack"){
+    ctx.strokeStyle="#31363e"; ctx.lineWidth=2; ctx.lineCap="round";
+    for (const sy of [-h*0.36, h*0.36]){ ctx.beginPath(); ctx.moveTo(-w/2,sy); ctx.lineTo(w/2,sy); ctx.stroke(); }
+    for (let i=0;i<3;i++){ const cx=-w/2 + w*(i+0.5)/3; ctx.beginPath(); ctx.moveTo(cx,-h*0.36); ctx.lineTo(cx,h*0.36); ctx.stroke(); }
+    ctx.lineCap="butt";
+  } else if (id === "cargo"){
+    ctx.fillStyle="#2b3440"; roundRect(ctx,-w*0.44,-h*0.42,w*0.88,h*0.84,3); ctx.fill();
+    ctx.strokeStyle="#1c232c"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.strokeStyle="#3c4653"; ctx.beginPath(); ctx.moveTo(-w*0.44,0); ctx.lineTo(w*0.44,0); ctx.stroke();
+  } else if (id === "fuelcan"){
+    ctx.fillStyle="#c0392b"; roundRect(ctx,-w*0.28,-h*0.42,w*0.56,h*0.84,2); ctx.fill();
+    ctx.strokeStyle="#7d2519"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle="#7d2519"; ctx.fillRect(-w*0.1,-h*0.5,w*0.2,h*0.12);
+  } else if (id === "lightbar"){
+    ctx.fillStyle="#20262e"; roundRect(ctx,-w*0.42,-h*0.22,w*0.84,h*0.44,2); ctx.fill();
+    ctx.fillStyle="#fff2a8"; const n=4; for (let i=0;i<n;i++){ const cx=-w*0.34 + (w*0.68)*i/(n-1); ctx.beginPath(); ctx.arc(cx,0,h*0.13,0,7); ctx.fill(); }
+  } else if (id === "kayak"){
+    ctx.fillStyle="#e08a3c"; ctx.beginPath(); ctx.ellipse(0,0,w*0.46,h*0.24,0,0,7); ctx.fill();
+    ctx.strokeStyle="#b96f2a"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-w*0.3,0); ctx.lineTo(w*0.3,0); ctx.stroke();
+  } else if (id === "crate"){
+    ctx.fillStyle="#9c6f34"; roundRect(ctx,-w*0.4,-h*0.4,w*0.8,h*0.8,2); ctx.fill();
+    ctx.strokeStyle="#6f4e22"; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-w*0.4,-h*0.4); ctx.lineTo(w*0.4,h*0.4); ctx.moveTo(w*0.4,-h*0.4); ctx.lineTo(-w*0.4,h*0.4); ctx.stroke();
+  } else if (id === "spare"){
+    const r = Math.min(w,h)*0.42;
+    ctx.fillStyle="#141414"; ctx.beginPath(); ctx.arc(0,0,r,0,7); ctx.fill();
+    ctx.fillStyle="#4d4d4d"; ctx.beginPath(); ctx.arc(0,0,r*0.4,0,7); ctx.fill();
+  } else if (id === "solar"){
+    ctx.fillStyle="#1b2a55"; roundRect(ctx,-w*0.44,-h*0.4,w*0.88,h*0.8,2); ctx.fill();
+    ctx.strokeStyle="#3a5aa8"; ctx.lineWidth=1;
+    for (let i=1;i<3;i++){ const gx=-w*0.44 + w*0.88*i/3; ctx.beginPath(); ctx.moveTo(gx,-h*0.4); ctx.lineTo(gx,h*0.4); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(-w*0.44,0); ctx.lineTo(w*0.44,0); ctx.stroke();
+    ctx.strokeStyle="#4a6fc8"; ctx.lineWidth=1.5; ctx.strokeRect(-w*0.44,-h*0.4,w*0.88,h*0.8);
+  }
+}
+
+/* =====================================================================
+   LOBBY
+   ===================================================================== */
+const lobby = document.getElementById("lobby");
+const nameInput = document.getElementById("nameInput");
+const roomInput = document.getElementById("roomInput");
+const startBtn = document.getElementById("startBtn");
+const lobbyErr = document.getElementById("lobbyErr");
+const shareHint = document.getElementById("shareHint");
+const config = { color: PALETTE[5], length:"short", rearTires:"4x4", extra:"spare", roof:["none"], propulsion:"fuel" };
+
+const swatchWrap = document.getElementById("swatches");
+PALETTE.forEach(c => {
+  const s = document.createElement("div");
+  s.className = "swatch" + (c===config.color ? " sel" : "");
+  s.style.background = c; s.dataset.c = c;
+  s.onclick = () => { config.color = c; document.querySelectorAll(".swatch").forEach(e=>e.classList.remove("sel")); s.classList.add("sel"); drawPreview(); };
+  swatchWrap.appendChild(s);
+});
+const customColor = document.createElement("input");
+customColor.type = "color"; customColor.value = "#3498db"; customColor.title = "custom color";
+customColor.oninput = () => { config.color = customColor.value; document.querySelectorAll(".swatch").forEach(e=>e.classList.remove("sel")); drawPreview(); };
+swatchWrap.appendChild(customColor);
+
+function wireToggle(id, key){
+  const grp = document.getElementById(id);
+  grp.querySelectorAll("button").forEach(btn => {
+    btn.onclick = () => { grp.querySelectorAll("button").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); config[key] = btn.dataset.v; if (key==="length") syncRoofSlots(); drawPreview(); };
+  });
+}
+wireToggle("lengthToggle","length"); wireToggle("tiresToggle","rearTires"); wireToggle("extraToggle","extra"); wireToggle("propToggle","propulsion");
+
+/* roof-accessory garage: one selector per slot; slot count follows the vehicle */
+function renderRoofSlots(){
+  const wrap = document.getElementById("roofSlots"); wrap.innerHTML = "";
+  const n = roofSlots(config);
+  for (let i=0;i<n;i++){
+    const cell = document.createElement("div"); cell.className = "roofslot";
+    if (n>1){ const num = document.createElement("span"); num.className="slotnum"; num.textContent = i+1; cell.appendChild(num); }
+    const sel = document.createElement("select"); sel.className = "roofsel";
+    for (const a of ACCESSORIES){ const o=document.createElement("option"); o.value=a.id; o.textContent=a.name; if ((config.roof[i]||"none")===a.id) o.selected=true; sel.appendChild(o); }
+    sel.onchange = () => { config.roof[i] = sel.value; drawPreview(); };
+    cell.appendChild(sel); wrap.appendChild(cell);
+  }
+}
+function syncRoofSlots(){
+  const n = roofSlots(config), cur = config.roof || [];
+  config.roof = []; for (let i=0;i<n;i++) config.roof[i] = cur[i] || "none";
+  renderRoofSlots();
+}
+syncRoofSlots();
+
+const pv = document.getElementById("previewCanvas");
+const pctx = pv.getContext("2d");
+function drawPreview(){
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  pv.width = pv.clientWidth*dpr; pv.height = pv.clientHeight*dpr;
+  pctx.setTransform(dpr,0,0,dpr,0,0);
+  const w = pv.clientWidth, h = pv.clientHeight;
+  pctx.clearRect(0,0,w,h);
+  const psc = vanLength(config) > 90 ? 1.55 : 2.1;   // shrink so the bus fits
+  pctx.save(); pctx.translate(w/2, h/2); pctx.rotate(-Math.PI/2); pctx.scale(psc, psc);
+  drawVan(pctx, config); pctx.restore();
+}
+window.addEventListener("resize", () => { if (lobby.style.display!=="none") drawPreview(); });
+
+function randomRoom(){ const a="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; let s=""; for(let i=0;i<4;i++) s+=a[(Math.random()*a.length)|0]; return s; }
+const urlRoom = new URLSearchParams(location.search).get("room");
+roomInput.value = (urlRoom || randomRoom()).toUpperCase();
+function shareURL(){ return `${location.origin}${location.pathname}?room=${encodeURIComponent(roomInput.value.trim().toUpperCase())}`; }
+function refreshShare(){ shareHint.textContent = shareURL(); }
+roomInput.oninput = refreshShare;
+document.getElementById("copyBtn").onclick = async () => {
+  try { await navigator.clipboard.writeText(shareURL()); document.getElementById("copyBtn").textContent = "Copied!"; setTimeout(()=>document.getElementById("copyBtn").textContent="Copy link",1200); }
+  catch { refreshShare(); }
+};
+refreshShare(); drawPreview();
+
+/* =====================================================================
+   GAME STATE
+   ===================================================================== */
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let VW = 0, VH = 0, DPR = 1;
+function resize(){
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  VW = window.innerWidth; VH = window.innerHeight;
+  canvas.width = VW*DPR; canvas.height = VH*DPR;
+  canvas.style.width = VW+"px"; canvas.style.height = VH+"px";
+}
+window.addEventListener("resize", resize); resize();
+
+let self = null;                       // my van
+const remotes = new Map();             // id -> remote van
+const cam = { x: SPAWN.x, y: SPAWN.y };
+const rings = [];                      // honk rings
+const floaters = [];                   // "+N" coin popups
+let playing = false;
+let clock = 0;
+
+/* day/night: a full 24-hour clock compressed into a 12-minute cycle (30s per in-game hour),
+   with summer-solstice daylight (sunrise 05:30, sunset 20:30 ≈ 15h day / 9h night → 7.5min day / 4.5min night).
+   Time comes from the shared wall clock, so every player sees the same time of day. */
+const MIN_PER_HOUR = 30000;                              // 1 in-game hour = 30 real seconds (12-min full cycle)
+const SUNRISE = 5.5, SUNSET = 20.5, TWILIGHT = 0.75;     // in-game hours
+function inGameHour(){ return (Date.now() / MIN_PER_HOUR) % 24; }   // 0..24
+function nightAmount(){                                   // 0 = full day, 1 = full night
+  const h = inGameHour(), tw = TWILIGHT;
+  if (h < SUNRISE - tw) return 1;                                    // deep night
+  if (h < SUNRISE + tw) return 1 - (h - (SUNRISE - tw)) / (2*tw);    // dawn 1->0
+  if (h < SUNSET  - tw) return 0;                                    // day
+  if (h < SUNSET  + tw) return (h - (SUNSET - tw)) / (2*tw);         // dusk 0->1
+  return 1;                                                          // night
+}
+function drawTimeOfDay(){
+  const h = inGameHour(), hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  const nite = nightAmount() > 0.5;
+  const label = (nite ? "☾ " : "☀ ") + String(hh).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
+  ctx.font = "700 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  const w = ctx.measureText(label).width + 26, x = VW/2, y = 22;
+  ctx.fillStyle = "rgba(10,15,22,0.72)"; roundRect(ctx, x-w/2, y-13, w, 26, 13); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = nite ? "#b9c6ff" : "#ffd98a"; ctx.fillText(label, x, y+1);
+}
+// live in-game time shown in the lobby's info card (updates every second)
+function updateLobbyClock(){
+  const el = document.getElementById("lobbyClock"); if (!el) return;
+  const h = inGameHour(), hh = Math.floor(h), mm = Math.floor((h - hh) * 60);
+  const nite = nightAmount() > 0.5;
+  el.textContent = (nite ? "☾ " : "☀ ") + String(hh).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
+  el.style.color = nite ? "#b9c6ff" : "#ffd98a";
+}
+updateLobbyClock(); setInterval(updateLobbyClock, 1000);
+
+// Fog of war
+const FOG = 120;
+const FCOLS = Math.ceil(WORLD_W/FOG), FROWS = Math.ceil(WORLD_H/FOG);
+const explored = new Uint8Array(FCOLS*FROWS);
+function reveal(x,y){
+  const R = 2, cx = Math.floor(x/FOG), cy = Math.floor(y/FOG);
+  for (let j=-R;j<=R;j++) for (let i=-R;i<=R;i++){
+    const gx=cx+i, gy=cy+j;
+    if (gx<0||gy<0||gx>=FCOLS||gy>=FROWS) continue;
+    if (i*i+j*j <= R*R+1) explored[gy*FCOLS+gx] = 1;
+  }
+}
+
+/* ---------- keyboard input (unchanged controls) ---------- */
+const keys = new Set();
+const DRIVE_KEYS = new Set(["arrowup","arrowdown","arrowleft","arrowright"," "]);
+function isTyping(){ const a=document.activeElement; return a && (a.tagName==="INPUT" || a.tagName==="TEXTAREA"); }
+const FWD_KEYS = new Set(["arrowup","w"]);           // the "accelerator"
+const isFwdDown = () => keys.has("arrowup") || keys.has("w");
+addEventListener("keydown", e => {
+  if (isTyping()) return;
+  const k = e.key.toLowerCase();
+  if (playing && (DRIVE_KEYS.has(k) || k==="f" || k==="t")) e.preventDefault();
+  if (k === "h" && playing && !keys.has("h")) honk();
+  // boost: tap the accelerator, then press-and-hold again within 300ms
+  if (playing && FWD_KEYS.has(k) && !isFwdDown()){
+    const now = performance.now();
+    if (self.accelTapArmed && now - self.accelTapTime < 300){ self.boost = true; self.accelTapArmed = false; }
+    self.accelPressTime = now;
+  }
+  keys.add(k);
+});
+addEventListener("keyup", e => {
+  if (isTyping()) return;
+  const k = e.key.toLowerCase();
+  keys.delete(k);
+  if (playing && FWD_KEYS.has(k) && !isFwdDown()){
+    if (self.boost){ self.boost = false; self.accelTapArmed = false; }
+    else if (performance.now() - self.accelPressTime < 260){ self.accelTapArmed = true; self.accelTapTime = performance.now(); }  // a quick tap arms the boost
+    else self.accelTapArmed = false;
+  }
+});
+addEventListener("blur", () => { keys.clear(); if (self){ self.boost = false; self.accelTapArmed = false; } });
+
+/* ---------- gamepad (Bluetooth / USB controllers via the browser Gamepad API) ---------- */
+let padIndex = null;          // which navigator.getGamepads() slot we're reading
+let padPrevA = false;         // previous A-button state, for horn edge-detection
+const PAD_DEAD = 0.18;        // stick deadzone
+function padToast(msg){
+  const t = document.getElementById("padToast");
+  if (!t) return;
+  t.textContent = msg;
+  t.style.opacity = "1";
+  clearTimeout(padToast._h);
+  padToast._h = setTimeout(() => { t.style.opacity = "0"; }, 2600);
+}
+addEventListener("gamepadconnected", e => {
+  if (padIndex === null) padIndex = e.gamepad.index;
+  padToast("🎮 Controller connected");
+  const ind = document.getElementById("padInd"); if (ind) ind.style.display = "";
+});
+addEventListener("gamepaddisconnected", e => {
+  if (e.gamepad.index === padIndex){
+    padIndex = null;
+    if (self){ self.padThrottle = 0; self.padSteer = 0; self.padBoost = false; self.padFuel = false; self.padHitch = false; }
+  }
+  // fall back to any still-connected pad
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (let i=0;i<pads.length;i++){ if (pads[i]){ padIndex = pads[i].index; break; } }
+  const stillOn = padIndex !== null;
+  padToast(stillOn ? "🎮 Controller connected" : "🎮 Controller disconnected");
+  const ind = document.getElementById("padInd"); if (ind) ind.style.display = stillOn ? "" : "none";
+});
+function pollGamepad(){
+  if (!self) return;
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  let gp = padIndex !== null ? pads[padIndex] : null;
+  if (!gp){ for (let i=0;i<pads.length;i++){ if (pads[i]){ gp = pads[i]; padIndex = pads[i].index; break; } } }
+  if (!gp){
+    self.padThrottle = 0; self.padSteer = 0; self.padBoost = false; self.padFuel = false; self.padHitch = false;
+    return;
+  }
+  const b = gp.buttons, ax = gp.axes;
+  const btn = i => b[i] && (b[i].pressed || b[i].value > 0.5);
+  const val = i => b[i] ? b[i].value : 0;
+  const dz = v => Math.abs(v) < PAD_DEAD ? 0 : v;
+  // throttle: right trigger = gas, left trigger = brake/reverse, left-stick Y and d-pad up/down also work
+  let thr = (val(7) - val(6)) + (-dz(ax[1] || 0)) + (btn(12) ? 1 : 0) - (btn(13) ? 1 : 0);
+  // steer: left-stick X and d-pad left/right
+  let str = dz(ax[0] || 0) + (btn(15) ? 1 : 0) - (btn(14) ? 1 : 0);
+  self.padThrottle = clamp(thr, -1, 1);
+  self.padSteer    = clamp(str, -1, 1);
+  self.padBoost = btn(5) || btn(4);          // RB / LB
+  self.padFuel  = btn(3) || btn(1);          // Y / B
+  self.padHitch = btn(2);                    // X
+  const aNow = btn(0);                       // A -> horn on rising edge
+  if (aNow && !padPrevA && playing) honk();
+  padPrevA = aNow;
+}
+
+/* ---------- pointer input: tap-to-drive, hold-to-reverse, tap-van horn, triple-tap trailer ---------- */
+const touchMode = (window.matchMedia && window.matchMedia("(pointer:coarse)").matches) || ("ontouchstart" in window);
+const HOLD_MS = 280, TAP_MOVE = 14, HOLD_MOVE = 18;
+let ptr = null, holdTimer = null, tapT = 0, tapN = 0, tapTid = null;
+function screenToWorld(cx, cy){ const r = canvas.getBoundingClientRect(); return { x: (cx-r.left) - VW/2 + cam.x, y: (cy-r.top) - VH/2 + cam.y }; }
+canvas.addEventListener("pointerdown", e => {
+  if (!playing) return;
+  try { canvas.setPointerCapture(e.pointerId); } catch {}
+  const w = screenToWorld(e.clientX, e.clientY);
+  ptr = { id:e.pointerId, sx:e.clientX, sy:e.clientY, wx:w.x, wy:w.y, moved:0, hold:false };
+  clearTimeout(holdTimer);
+  holdTimer = setTimeout(() => {
+    if (ptr && !ptr.hold && ptr.moved < HOLD_MOVE){ ptr.hold = true; self.waypoints.length = 0; self.hitchIntent = null; self.reverseTarget = { x:ptr.wx, y:ptr.wy }; }
+  }, HOLD_MS);
+});
+canvas.addEventListener("pointermove", e => {
+  if (!ptr || e.pointerId !== ptr.id) return;
+  ptr.moved += Math.hypot(e.clientX-ptr.sx, e.clientY-ptr.sy); ptr.sx = e.clientX; ptr.sy = e.clientY;
+  if (ptr.hold){ const w = screenToWorld(e.clientX, e.clientY); self.reverseTarget = { x:w.x, y:w.y }; }
+});
+canvas.addEventListener("pointerup", e => {
+  if (!ptr || e.pointerId !== ptr.id) return;
+  clearTimeout(holdTimer);
+  if (ptr.hold) self.reverseTarget = null;
+  else if (ptr.moved < TAP_MOVE) handleTap(ptr.wx, ptr.wy);
+  ptr = null;
+});
+canvas.addEventListener("pointercancel", () => { clearTimeout(holdTimer); if (ptr && ptr.hold) self.reverseTarget = null; ptr = null; });
+
+function handleTap(wx, wy){
+  if (Math.hypot(wx-self.x, wy-self.y) <= vanLength(self.config)/2 + 12){ honk(); return; }   // tap own van = horn
+  let tr=null, td=1e9;
+  for (const t of trailers){ const d=Math.hypot(wx-t.tx, wy-t.ty); if (d < TRAILER_LEN/2 + 14 && d < td){ tr=t; td=d; } }
+  if (tr){
+    const now = performance.now();
+    if (tapTid===tr.id && now-tapT < 650) tapN++; else { tapN=1; tapTid=tr.id; }
+    tapT = now;
+    if (tapN >= 3){ tapN=0; trailerTapAction(tr); return; }   // triple-tap trailer = hitch/drop
+    addWaypoint(tr.tx, tr.ty); return;
+  }
+  addWaypoint(wx, wy);   // tap ground = drive there (queues a waypoint)
+}
+function trailerTapAction(tr){
+  if (tr.towedBy === self.id){ net.drop(tr.id, tr.tx, tr.ty, tr.tangle); self.waypoints.length = 0; }
+  else if (!tr.towedBy){ self.hitchIntent = tr.id; addWaypoint(tr.tx, tr.ty); }
+}
+function addWaypoint(wx, wy){
+  self.reverseTarget = null;
+  const from = self.waypoints.length ? self.waypoints[self.waypoints.length-1] : { x:self.x, y:self.y };
+  const path = findPath(from.x, from.y, wx, wy);
+  const pts = (path && path.length) ? path : [{ x:wx, y:wy }];
+  for (const p of pts){ const last = self.waypoints[self.waypoints.length-1]; if (last && Math.hypot(p.x-last.x, p.y-last.y) < 8) continue; self.waypoints.push({ x:p.x, y:p.y }); }
+  self.stuckT = 0;
+}
+
+/* ---------- text chat ---------- */
+const chatBar=document.getElementById("chatBar"), chatPanel=document.getElementById("chatPanel"),
+      chatLog=document.getElementById("chatLog"), chatInput=document.getElementById("chatInput"), chatBadge=document.getElementById("chatBadge");
+let chatOpen=false, unread=0;
+function esc(s){ return String(s).replace(/[&<>]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c])); }
+function scrollChat(){ chatLog.scrollTop = chatLog.scrollHeight; }
+function addChatLine(name, color, text){
+  const d=document.createElement("div"); d.className="cline";
+  d.innerHTML = `<b style="color:${esc(color)}">${esc(name)}:</b> ${esc(text)}`;
+  chatLog.appendChild(d); while (chatLog.children.length>60) chatLog.removeChild(chatLog.firstChild);
+  scrollChat();
+  if (!chatOpen){ unread++; chatBadge.textContent = unread>9?"9+":String(unread); chatBadge.style.display="inline-block"; }
+}
+chatBar.addEventListener("click", () => {
+  chatOpen=!chatOpen; chatPanel.style.display = chatOpen?"flex":"none";
+  if (chatOpen){ unread=0; chatBadge.style.display="none"; setTimeout(()=>{ scrollChat(); chatInput.focus(); }, 0); }
+});
+chatInput.addEventListener("keydown", e => {
+  e.stopPropagation();
+  if (e.key!=="Enter") return;
+  const raw = chatInput.value; chatInput.value="";
+  const t = raw.trim().slice(0,200);
+  if (!t || !self) return;
+  if (cmd.active){ handleFlow(t); return; }              // in a /gift or /swap flow → route to state machine
+  const low = t.toLowerCase();
+  if (low==="/roomcode" || low==="/room"){ doRoomCode(); return; }
+  if (low==="/gift"){ startGift(); return; }
+  if (low==="/swap"){ startSwap(); return; }
+  if (low==="/help" || low==="/commands"){ addSysLine("Commands: <b>/gift</b>, <b>/swap</b>, <b>/roomcode</b>."); return; }
+  if (t[0]==="/"){ addSysLine("Unknown command. Try <b>/gift</b>, <b>/swap</b>, <b>/roomcode</b>."); return; }
+  addChatLine(self.name, self.config.color, t); net.sendChat(t);   // normal chat
+});
+chatInput.addEventListener("keyup", e => e.stopPropagation());
+
+/* ---------- chat commands: /roomcode, /gift, /swap ---------- */
+let cmd = { active:false };          // current interactive flow for the local player
+const swapReqQueue = [];             // incoming swap requests that arrived while busy
+function addSysLine(html){
+  const d=document.createElement("div"); d.className="cline sys"; d.innerHTML=html;
+  chatLog.appendChild(d); while (chatLog.children.length>60) chatLog.removeChild(chatLog.firstChild);
+  scrollChat();
+  if (!chatOpen){ unread++; chatBadge.textContent=unread>9?"9+":String(unread); chatBadge.style.display="inline-block"; }
+}
+function openChat(){ if (!chatOpen){ chatOpen=true; chatPanel.style.display="flex"; unread=0; chatBadge.style.display="none"; setTimeout(scrollChat,0); } }
+function endCmd(){ cmd={ active:false }; maybeDequeueSwap(); }
+
+const accName = id => { const a=ACCESSORIES.find(x=>x.id===id); return a?a.name:id; };
+function itemWord(k){ return k==="gold" ? "gold" : k==="fuel" ? "fuel" : "electric ⚡"; }
+function fmtAmt(n){ return Number.isInteger(n) ? String(n) : String(Math.round(n*100)/100); }
+function otherPlayers(){ const out=[]; for (const r of remotes.values()) out.push(r); return out; }
+// the swappable "items" on a van: each equipped roof slot + the pack-in-back slot
+function vehicleItems(cfg){
+  const out=[]; const roof=(cfg&&cfg.roof)||[];
+  for (let i=0;i<roof.length;i++){ const id=roof[i]; if (id && id!=="none") out.push({ kind:"roof", index:i, id, name:accName(id) }); }
+  const ex = cfg && cfg.extra;
+  if (ex) out.push({ kind:"pack", id:ex, name: ex==="fuel" ? "Extra fuel tank (+60 fuel)" : "Spare tire" });
+  return out;
+}
+function recomputeVehicle(){
+  if (!self) return;
+  self.maxFuel = maxFuelFor(self.config); self.fuel = Math.min(self.fuel, self.maxFuel);
+  self.maxBattery = maxBatteryFor(self.config); self.battery = Math.min(self.battery, self.maxBattery);
+  self.solarPanels = solarPanelsFor(self.config);
+}
+function setSlot(cfg, kind, ref, id){ if (kind==="roof"){ if (!Array.isArray(cfg.roof)) cfg.roof=[]; cfg.roof[ref]=id; } else { cfg.extra = id; } }
+
+function doRoomCode(){
+  const code = CURRENT_ROOM || (roomInput.value||"").toUpperCase() || "MAIN";
+  const url = `${location.origin}${location.pathname}?room=${encodeURIComponent(code)}`;
+  addSysLine(`🔑 Room code: <b>${esc(code)}</b> &nbsp;·&nbsp; join link: ${esc(url)}`);
+}
+
+/* ----- /gift ----- */
+function startGift(){
+  const items=[{key:"gold",label:"Gold"}];
+  if (self.maxFuel>0) items.push({key:"fuel",label:"Fuel"});
+  if (self.maxBattery>0) items.push({key:"electric",label:"Electric ⚡"});
+  addSysLine("🎁 <b>Gift</b> — reply with a number (or <b>/cancel</b>):");
+  items.forEach((it,i)=> addSysLine(`&nbsp;&nbsp;${i+1}. ${it.label}`));
+  cmd={ active:true, mode:"gift", step:"item", items };
+}
+function giftMax(item, r){
+  const rr = remotes.get(r.id) || r;
+  if (item==="gold") return Math.floor(self.coins);
+  if (item==="fuel") return Math.max(0, Math.min(self.fuel, (rr.maxFuel||0)-(rr.fuel||0)));
+  return Math.max(0, Math.min(self.battery, (rr.maxBattery||0)-(rr.battery||0)));
+}
+function giftStep(t){
+  if (cmd.step==="item"){
+    const it=cmd.items[parseInt(t,10)-1]; if (!it){ addSysLine("Pick a valid number."); return; }
+    cmd.item=it.key;
+    const elig=otherPlayers().filter(r=> cmd.item==="gold" ? true : cmd.item==="fuel" ? r.maxFuel>0 : r.maxBattery>0);
+    if (!elig.length){ addSysLine("No one here can receive that right now."); endCmd(); return; }
+    cmd.recips=elig; cmd.step="recip";
+    addSysLine(`Give <b>${esc(it.label)}</b> to who?`);
+    elig.forEach((r,i)=> addSysLine(`&nbsp;&nbsp;${i+1}. ${esc(r.name||"Traveler")}`));
+    return;
+  }
+  if (cmd.step==="recip"){
+    const r=cmd.recips[parseInt(t,10)-1]; if (!r){ addSysLine("Pick a valid number."); return; }
+    if (!remotes.has(r.id)){ addSysLine("That player left."); endCmd(); return; }
+    const max=giftMax(cmd.item,r);
+    if (max<=0){ addSysLine(cmd.item==="gold" ? "You have no gold to give." : `${esc(r.name)}'s tank is full.`); endCmd(); return; }
+    cmd.recip=r; cmd.max=max; cmd.step="amount";
+    addSysLine(`How much ${itemWord(cmd.item)} for <b>${esc(r.name)}</b>? (max ${fmtAmt(max)})`);
+    return;
+  }
+  if (cmd.step==="amount"){
+    let amt = cmd.item==="gold" ? parseInt(t,10) : parseFloat(t);
+    if (!(amt>0)){ addSysLine("Enter a number greater than 0."); return; }
+    amt = Math.min(amt, cmd.max);
+    amt = cmd.item==="gold" ? Math.floor(amt) : Math.round(amt*100)/100;
+    net.relay({ type:"gift", from:self.id, fromName:self.name, to:cmd.recip.id, toName:cmd.recip.name, item:cmd.item, amount:amt });
+    endCmd();
+  }
+}
+function applyGift(m){
+  if (!self) return;
+  if (m.to===self.id){
+    if (m.item==="gold") self.coins += m.amount;
+    else if (m.item==="fuel") self.fuel = Math.min(self.maxFuel, self.fuel + m.amount);
+    else if (m.item==="electric") self.battery = Math.min(self.maxBattery, self.battery + m.amount);
+    floaters.push({ x:self.x, y:self.y-34, t:0, text:"+"+fmtAmt(m.amount)+" "+itemWord(m.item), col:"#5ee0a0", big:true });
+    addSysLine(`🎁 <b>${esc(m.fromName)}</b> gave you ${fmtAmt(m.amount)} ${itemWord(m.item)}.`);
+  } else if (m.from===self.id){
+    if (m.item==="gold") self.coins = Math.max(0, self.coins - m.amount);
+    else if (m.item==="fuel") self.fuel = Math.max(0, self.fuel - m.amount);
+    else if (m.item==="electric") self.battery = Math.max(0, self.battery - m.amount);
+    addSysLine(`🎁 You gave ${fmtAmt(m.amount)} ${itemWord(m.item)} to <b>${esc(m.toName)}</b>.`);
+  }
+}
+
+/* ----- /swap (roof + pack-in-back, requires the other player to accept) ----- */
+function startSwap(){
+  const others=otherPlayers();
+  if (!others.length){ addSysLine("No one else here to swap with."); return; }
+  addSysLine("↔ <b>Swap</b> — who with? (reply a number, or <b>/cancel</b>)");
+  others.forEach((r,i)=> addSysLine(`&nbsp;&nbsp;${i+1}. ${esc(r.name||"Traveler")}`));
+  cmd={ active:true, mode:"swap", step:"target", others };
+}
+function swapStep(t){
+  if (cmd.step==="target"){
+    const r=cmd.others[parseInt(t,10)-1]; if (!r){ addSysLine("Pick a valid number."); return; }
+    if (!remotes.has(r.id)){ addSysLine("That player left."); endCmd(); return; }
+    const theirs=vehicleItems(r.config);
+    if (!theirs.length){ addSysLine(`${esc(r.name)} has no items to swap.`); endCmd(); return; }
+    cmd.target=r; cmd.theirItems=theirs; cmd.step="theirItem";
+    addSysLine(`Which of <b>${esc(r.name)}</b>'s items do you want?`);
+    theirs.forEach((it,i)=> addSysLine(`&nbsp;&nbsp;${i+1}. ${esc(it.name)} <span style="opacity:.7">(${it.kind==="pack"?"pack":"roof"})</span>`));
+    return;
+  }
+  if (cmd.step==="theirItem"){
+    const it=cmd.theirItems[parseInt(t,10)-1]; if (!it){ addSysLine("Pick a valid number."); return; }
+    const mine=vehicleItems(self.config).filter(x=>x.kind===it.kind);
+    if (!mine.length){ addSysLine(`You have no ${it.kind==="pack"?"pack":"roof"} item to trade for their ${esc(it.name)}.`); endCmd(); return; }
+    cmd.theirPick=it; cmd.myItems=mine; cmd.step="myItem";
+    addSysLine(`Which of your items to give for their <b>${esc(it.name)}</b>?`);
+    mine.forEach((x,i)=> addSysLine(`&nbsp;&nbsp;${i+1}. ${esc(x.name)}`));
+    return;
+  }
+  if (cmd.step==="myItem"){
+    const mineItem=cmd.myItems[parseInt(t,10)-1]; if (!mineItem){ addSysLine("Pick a valid number."); return; }
+    if (!remotes.has(cmd.target.id)){ addSysLine("That player left."); endCmd(); return; }
+    net.relay({ type:"swapReq", from:self.id, fromName:self.name, to:cmd.target.id, toName:cmd.target.name,
+      aKind:mineItem.kind, aRef:(mineItem.kind==="roof"?mineItem.index:"pack"), aId:mineItem.id, aName:mineItem.name,
+      bKind:cmd.theirPick.kind, bRef:(cmd.theirPick.kind==="roof"?cmd.theirPick.index:"pack"), bId:cmd.theirPick.id, bName:cmd.theirPick.name });
+    addSysLine(`↔ Swap request sent to <b>${esc(cmd.target.name)}</b> — waiting for them to accept…`);
+    endCmd();
+  }
+}
+function receiveSwapReq(m){
+  if (!self) return;
+  if (cmd.active){ swapReqQueue.push(m); addSysLine(`↔ <b>${esc(m.fromName)}</b> wants to swap — finish your current action and it'll appear.`); return; }
+  startAccept(m);
+}
+function startAccept(m){
+  openChat();
+  addSysLine(`↔ <b>${esc(m.fromName)}</b> offers their <b>${esc(m.aName)}</b> for your <b>${esc(m.bName)}</b>. Type <b>YES</b> or <b>NO</b>.`);
+  cmd={ active:true, mode:"swapAccept", offer:m };
+}
+function acceptStep(t){
+  const low=t.toLowerCase(), m=cmd.offer;
+  if (low==="yes"||low==="y"){
+    if (!remotes.has(m.from)){ addSysLine(`${esc(m.fromName)} left — swap cancelled.`); endCmd(); return; }
+    setSlot(self.config, m.bKind, m.bRef, m.aId);        // my slot receives their item
+    recomputeVehicle(); net.sendConfig();
+    net.relay({ type:"swapOk", from:m.from, fromName:m.fromName, to:self.id, toName:self.name,
+      aKind:m.aKind, aRef:m.aRef, aId:m.aId, aName:m.aName, bId:m.bId, bName:m.bName });
+    addSysLine(`↔ Swapped your <b>${esc(m.bName)}</b> for <b>${esc(m.fromName)}</b>'s <b>${esc(m.aName)}</b>.`);
+    endCmd();
+  } else if (low==="no"||low==="n"){
+    net.relay({ type:"swapNo", from:m.from, toName:self.name });
+    addSysLine("↔ Swap declined."); endCmd();
+  } else {
+    addSysLine("Type <b>YES</b> or <b>NO</b>.");
+  }
+}
+function finalizeSwapInitiator(m){
+  if (!self) return;
+  setSlot(self.config, m.aKind, m.aRef, m.bId);          // my slot receives their item
+  recomputeVehicle(); net.sendConfig();
+  addSysLine(`↔ <b>${esc(m.toName)}</b> accepted — you swapped your <b>${esc(m.aName)}</b> for their <b>${esc(m.bName)}</b>.`);
+}
+function cancelIfPartnerGone(id){
+  const t=cmd.target&&cmd.target.id, o=cmd.offer&&cmd.offer.from, r=cmd.recip&&cmd.recip.id;
+  if (t===id||o===id||r===id){ addSysLine("The other player left — cancelled."); endCmd(); }
+}
+function maybeDequeueSwap(){
+  if (cmd.active) return;
+  while (swapReqQueue.length){ const m=swapReqQueue.shift(); if (remotes.has(m.from)){ startAccept(m); return; } }
+}
+
+function handleFlow(t){
+  const low=t.toLowerCase();
+  if (low==="/cancel"||low==="cancel"){ addSysLine("Cancelled."); endCmd(); return; }
+  if (cmd.mode==="gift") giftStep(t);
+  else if (cmd.mode==="swap") swapStep(t);
+  else if (cmd.mode==="swapAccept") acceptStep(t);
+}
+
+/* ---------- touch action buttons ---------- */
+const btnHorn=document.getElementById("btnHorn"), btnAction=document.getElementById("btnAction");
+btnHorn.addEventListener("pointerdown", e => { e.preventDefault(); if (playing) honk(); });
+btnAction.addEventListener("pointerdown", e => {
+  e.preventDefault(); if (!playing) return;
+  const act=btnAction.dataset.act;
+  if (act==="fuel"){ self.fuelHold=true; }
+  else if (act==="drop"){ const my=trailers.find(t=>t.towedBy===self.id); if (my) net.drop(my.id, my.tx, my.ty, my.tangle); }
+  else if (act==="hitch"){ const t=trailers.find(t=>t.id===btnAction.dataset.tid); if (t){ if (Math.hypot(t.tx-self.x, t.ty-self.y)<HITCH_R) net.hitch(t.id); else { self.hitchIntent=t.id; addWaypoint(t.tx, t.ty); } } }
+});
+btnAction.addEventListener("pointerup", () => { self.fuelHold=false; });
+btnAction.addEventListener("pointercancel", () => { self.fuelHold=false; });
+function updateTouchButtons(){
+  if (!touchMode) return;
+  const my=trailers.find(t=>t.towedBy===self.id);
+  let label="", act="", tid="";
+  if (my){ label="Drop"; act="drop"; }
+  else if (self.atStation && self.fuel<self.maxFuel){ label="⛽ Fuel"; act="fuel"; }
+  else if (self.atCharger && self.maxBattery>0 && self.battery<self.maxBattery){ label="⚡ Charge"; act="fuel"; }   // fuelHold drives charging too
+  else { for (const t of trailers){ if (t.towedBy) continue; if (Math.hypot(t.tx-self.x, t.ty-self.y)<HITCH_R*1.7){ label="Hitch"; act="hitch"; tid=t.id; break; } } }
+  if (act){ if (btnAction.dataset.act!==act || btnAction.textContent!==label){ btnAction.textContent=label; btnAction.dataset.act=act; } btnAction.dataset.tid=tid; btnAction.style.display="block"; }
+  else if (btnAction.style.display!=="none"){ btnAction.style.display="none"; btnAction.dataset.act=""; }
+}
+
+/* =====================================================================
+   NETWORKING  (PeerJS host/client star; host is world authority)
+   ===================================================================== */
+const statusEl = document.getElementById("status");
+const statusText = document.getElementById("statusText");
+const Peer = window.Peer || (window.peerjs && window.peerjs.Peer);
+
+const net = {
+  peer: null, isHost: false, selfId: null,
+  hostConn: null, conns: new Map(), roster: {}, triedFlip: false,
+};
+let CURRENT_ROOM = null;   // set when a game starts; used by /roomcode
+function hostIdFor(room){ return "vanbound-v2-" + room.replace(/[^A-Z0-9]/gi,"").toUpperCase() + "-host"; }
+function snapshot(){
+  return { id:self.id, name:self.name, config:self.config, x:self.x, y:self.y,
+           angle:self.angle, speed:self.speed||0, fuel:self.fuel, battery:self.battery, coins:self.coins };
+}
+function worldSnapshot(){
+  return { coins: coins.map(c => ({ id:c.id, x:c.x, y:c.y })),
+           taken: Array.from(takenCoins),
+           boosts: fuelBoosts.map(b => ({ id:b.id, x:b.x, y:b.y })),
+           takenBoosts: Array.from(takenBoosts),
+           elecs: elecFills.map(e => ({ id:e.id, x:e.x, y:e.y })),
+           takenElecs: Array.from(takenElec),
+           trailers: trailers.map(t => ({ id:t.id, towedBy:t.towedBy, x:t.x, y:t.y, angle:t.angle })) };
+}
+
+startBtn.onclick = () => {
+  if (!Peer){ lobbyErr.textContent = "Couldn't load the multiplayer library — check your connection and reload."; return; }
+  const name = (nameInput.value.trim() || "Traveler").slice(0,16);
+  const room = (roomInput.value.trim().toUpperCase() || "MAIN");
+  CURRENT_ROOM = room;
+  lobbyErr.textContent = "";
+  startBtn.disabled = true; startBtn.textContent = "Connecting…";
+  self = {
+    id:null, name, config:{...config},
+    x: SPAWN.x + (Math.random()*60-30), y: SPAWN.y + (Math.random()*40-20),
+    angle: 0, speed: 0, fuel: maxFuelFor(config), maxFuel: maxFuelFor(config),
+    propulsion: config.propulsion, battery: maxBatteryFor(config), maxBattery: maxBatteryFor(config),
+    solarPanels: solarPanelsFor(config), solarAccum: 0, solarCharging: false, batteryPulseT: 99,
+    coins: 100, refueling:false, atStation:false, fuelSession:false, fuelMsg:"",
+    atCharger:false, chargeSession:false, charging:false, chargeMsg:"", evMode:false,
+    tHold:0, tConsumed:false, fuelHold:false, throttleHold:0, cruise:false,
+    waypoints:[], reverseTarget:null, hitchIntent:null, stuckT:0,
+    boost:false, boosting:false, accelTapArmed:false, accelTapTime:0, accelPressTime:0,
+    padThrottle:0, padSteer:0, padBoost:false, padFuel:false, padHitch:false,
+  };
+  connect(room);
+};
+
+function connect(room){
+  const HOST_ID = hostIdFor(room);
+  const p = new Peer(HOST_ID);
+  net.peer = p;
+  p.on("open", () => {
+    net.isHost = true; net.selfId = HOST_ID; self.id = HOST_ID;
+    net.roster[HOST_ID] = snapshot();
+    setStatus(true); p.on("connection", onHostConnection); beginGame();
+  });
+  p.on("error", (err) => {
+    if (err && err.type === "unavailable-id"){ try { p.destroy(); } catch {} joinAsClient(room, HOST_ID); }
+    else if (!playing){ startBtn.disabled=false; startBtn.textContent="Hit the road";
+      lobbyErr.textContent = "Connection trouble ("+((err&&err.type)||"unknown")+"). Try again."; }
+  });
+}
+function joinAsClient(room, HOST_ID){
+  const p = new Peer();
+  net.peer = p; net.isHost = false;
+  p.on("open", (id) => {
+    net.selfId = id; self.id = id;
+    const conn = p.connect(HOST_ID, { reliable:true });
+    net.hostConn = conn;
+    conn.on("open", () => { setStatus(true); conn.send({ type:"join", player: snapshot() }); beginGame(); });
+    conn.on("data", (m) => applyIncoming(m));
+    conn.on("close", () => { setStatus(false); if (playing) showDisconnected("The host left — this session has ended."); });
+    conn.on("error", () => {});
+  });
+  p.on("error", (err) => {
+    if (err && err.type === "peer-unavailable" && !net.triedFlip){
+      net.triedFlip = true; try { p.destroy(); } catch {} setTimeout(() => connect(room), 500);
+    } else if (!playing){ startBtn.disabled=false; startBtn.textContent="Hit the road";
+      lobbyErr.textContent = "Couldn't reach the host. Ask them to open the room first, then retry."; }
+  });
+}
+
+function onHostConnection(conn){
+  conn.on("data", (m) => hostHandle(conn, m));
+  conn.on("close", () => {
+    net.conns.delete(conn.peer);
+    // drop any trailer this player was towing
+    for (const tr of trailers){ if (tr.towedBy === conn.peer) hostDropTrailer(tr.id, conn.peer, tr.tx, tr.ty, tr.tangle); }
+    if (net.roster[conn.peer]){ delete net.roster[conn.peer]; hostBroadcast({type:"left", id:conn.peer}); applyIncoming({type:"left", id:conn.peer}); }
+  });
+  conn.on("error", () => {});
+}
+function hostHandle(conn, m){
+  if (m.type === "join"){
+    if (!net.roster[conn.peer] && Object.keys(net.roster).length >= 4){
+      try { conn.send({ type:"full" }); } catch {}
+      setTimeout(() => { try { conn.close(); } catch {} }, 250); return;
+    }
+    net.conns.set(conn.peer, conn);
+    const player = { ...m.player, id: conn.peer };
+    net.roster[conn.peer] = player;
+    conn.send({ type:"welcome", id:conn.peer, players: net.roster, world: worldSnapshot() });
+    hostBroadcast({ type:"player", player }, conn.peer);
+    applyIncoming({ type:"player", player });
+  } else if (m.type === "update"){
+    const p = net.roster[conn.peer]; if (!p) return;
+    Object.assign(p, m.state);
+    hostBroadcast({ type:"state", id:conn.peer, ...m.state }, conn.peer);
+    applyIncoming({ type:"state", id:conn.peer, ...m.state });
+  } else if (m.type === "honk"){
+    hostBroadcast({ type:"honk", id:conn.peer }, conn.peer); applyIncoming({ type:"honk", id:conn.peer });
+  } else if (m.type === "grab"){ hostGrabCoin(m.id, conn.peer);
+  } else if (m.type === "grabBoost"){ hostGrabBoost(m.id, conn.peer);
+  } else if (m.type === "grabElec"){ hostGrabElec(m.id, conn.peer);
+  } else if (m.type === "hitch"){ hostHitchTrailer(m.tid, conn.peer);
+  } else if (m.type === "drop"){ hostDropTrailer(m.tid, conn.peer, m.x, m.y, m.angle);
+  } else if (m.type === "chat"){
+    const p=net.roster[conn.peer]; const name=p?p.name:"?"; const color=(p&&p.config&&p.config.color)||"#fff"; const text=String(m.text||"").slice(0,200);
+    addChatLine(name, color, text); hostBroadcast({ type:"chat", id:conn.peer, name, color, text }, conn.peer);
+  } else if (m.type === "playerUpdate"){
+    // a client changed its van mid-game (e.g. after a swap) — refresh roster + fan out
+    const p = net.roster[conn.peer]; if (p) Object.assign(p, m.player);
+    hostBroadcast({ type:"player", player: net.roster[conn.peer] }, conn.peer);
+    applyIncoming({ type:"player", player: net.roster[conn.peer] });
+  } else if (m.__relay){
+    // targeted transactions (gift/swap): host applies its own effect and fans out to everyone (incl. sender for echo)
+    applyIncoming(m); hostBroadcast(m);
+  }
+}
+function hostBroadcast(msg, exceptId){ for (const [pid,c] of net.conns){ if (pid===exceptId) continue; try { c.send(msg); } catch {} } }
+
+/* world-authoritative actions (host only) */
+function hostGrabCoin(id, by){
+  if (takenCoins.has(id)) return;
+  const msg = { type:"taken", id, by }; applyTaken(msg); hostBroadcast(msg);
+  coinRespawnQueue.push({ kind:"coin", id, at: performance.now() + COIN_RESPAWN_MS });   // reappears elsewhere in 30s
+}
+function hostGrabBoost(id, by){
+  if (takenBoosts.has(id)) return;
+  const msg = { type:"boostTaken", id, by }; applyBoostTaken(msg); hostBroadcast(msg);
+  coinRespawnQueue.push({ kind:"boost", id, at: performance.now() + COIN_RESPAWN_MS });
+}
+function hostGrabElec(id, by){
+  if (takenElec.has(id)) return;
+  const msg = { type:"elecTaken", id, by }; applyElecTaken(msg); hostBroadcast(msg);
+  coinRespawnQueue.push({ kind:"elec", id, at: performance.now() + ELEC_RESPAWN_MS });   // respawn after 60s
+}
+function hostHitchTrailer(tid, by){
+  const tr = trailers.find(t=>t.id===tid);
+  if (!tr || tr.towedBy) return;
+  if (trailers.some(t=>t.towedBy===by)) return;   // one trailer per van
+  const msg = { type:"trailer", id:tid, towedBy:by, x:tr.x, y:tr.y, angle:tr.angle };
+  applyTrailer(msg); hostBroadcast(msg);
+}
+function hostDropTrailer(tid, by, x, y, angle){
+  const tr = trailers.find(t=>t.id===tid);
+  if (!tr || tr.towedBy !== by) return;
+  const zone = dropZones.find(z => (x-z.x)**2 + (y-z.y)**2 < z.r*z.r);
+  if (zone){
+    deliverySinceBonus++;
+    const bonus = (Math.random() < 1/12) || (deliverySinceBonus >= 20);   // guaranteed ≥ once per 20
+    if (bonus) deliverySinceBonus = 0;
+    const value = bonus ? zone.value * 5 : zone.value;
+    const dmsg = { type:"delivered", by, value, bonus, x: zone.x, y: zone.y };
+    applyDelivered(dmsg); hostBroadcast(dmsg);
+    const np = randomDrivablePoint();                                     // trailer reappears somewhere new
+    const tmsg = { type:"trailer", id:tid, towedBy:null, x:np.x, y:np.y, angle:0 };
+    applyTrailer(tmsg); hostBroadcast(tmsg);
+  } else {
+    const tmsg = { type:"trailer", id:tid, towedBy:null, x, y, angle };
+    applyTrailer(tmsg); hostBroadcast(tmsg);
+  }
+}
+
+/* net outbound helpers (called by game code, host or client) */
+net.sendState = (s) => {
+  if (net.isHost){ const me = net.roster[net.selfId]; if (me) Object.assign(me, s); hostBroadcast({ type:"state", id:net.selfId, ...s }); }
+  else if (net.hostConn && net.hostConn.open){ net.hostConn.send({ type:"update", state:s }); }
+};
+net.sendHonk = () => { if (net.isHost) hostBroadcast({ type:"honk", id:net.selfId }); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"honk" }); };
+net.grabCoin = (id) => { if (net.isHost) hostGrabCoin(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grab", id }); };
+net.grabBoost = (id) => { if (net.isHost) hostGrabBoost(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabBoost", id }); };
+net.grabElec = (id) => { if (net.isHost) hostGrabElec(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabElec", id }); };
+net.hitch = (tid) => { if (net.isHost) hostHitchTrailer(tid, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"hitch", tid }); };
+net.drop = (tid, x, y, angle) => { if (net.isHost) hostDropTrailer(tid, self.id, x, y, angle); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"drop", tid, x, y, angle }); };
+net.sendChat = (text) => { const msg={ type:"chat", id:self.id, name:self.name, color:self.config.color, text }; if (net.isHost) hostBroadcast(msg); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"chat", text }); };
+// targeted transaction (gift/swap): host fans out to everyone; effect resolved per-client in applyIncoming
+net.relay = (msg) => { msg.__relay = true; if (net.isHost){ applyIncoming(msg); hostBroadcast(msg); } else if (net.hostConn && net.hostConn.open){ net.hostConn.send(msg); } };
+// broadcast my current van (config + state) so others re-render + recompute attributes after a swap
+net.sendConfig = () => {
+  const snap = snapshot();
+  if (net.isHost){ const me=net.roster[net.selfId]; if (me) Object.assign(me, snap); hostBroadcast({ type:"player", player:snap }); }
+  else if (net.hostConn && net.hostConn.open){ net.hostConn.send({ type:"playerUpdate", player:snap }); }
+};
+
+/* apply state changes locally (both roles) */
+function applyTaken(m){ takenCoins.add(m.id); if (m.by === self.id){ self.coins += COIN_VALUE; const c = coins.find(c=>c.id===m.id); if (c) floaters.push({ x:c.x, y:c.y, t:0, text:"+"+COIN_VALUE, col:"#ffd23f" }); } }
+function applyCoinRespawn(m){ const c = coins.find(c=>c.id===m.id); if (!c) return; c.x=m.x; c.y=m.y; takenCoins.delete(m.id); requestedCoins.delete(m.id); }
+function applyBoostTaken(m){ takenBoosts.add(m.id); if (m.by === self.id){ self.fuel = Math.min(self.maxFuel, self.fuel + FUEL_BOOST_AMOUNT); const b = fuelBoosts.find(b=>b.id===m.id); if (b) floaters.push({ x:b.x, y:b.y, t:0, text:"+"+FUEL_BOOST_AMOUNT+" fuel", col:"#4fd1c5", big:true }); } }
+function applyBoostRespawn(m){ const b = fuelBoosts.find(b=>b.id===m.id); if (!b) return; b.x=m.x; b.y=m.y; takenBoosts.delete(m.id); requestedBoosts.delete(m.id); }
+function applyElecTaken(m){ takenElec.add(m.id); if (m.by === self.id){ self.battery = Math.min(self.maxBattery, self.battery + ELEC_FILL_AMOUNT); const e = elecFills.find(e=>e.id===m.id); if (e) floaters.push({ x:e.x, y:e.y, t:0, text:"+"+ELEC_FILL_AMOUNT+" ⚡", col:"#7dfbe0", big:true }); } }
+function applyElecRespawn(m){ const e = elecFills.find(e=>e.id===m.id); if (!e) return; e.x=m.x; e.y=m.y; takenElec.delete(m.id); requestedElec.delete(m.id); }
+function processCoinRespawns(){
+  if (!net.isHost || !coinRespawnQueue.length) return;
+  const now = performance.now();
+  for (let i=coinRespawnQueue.length-1;i>=0;i--){
+    if (now >= coinRespawnQueue[i].at){
+      const item = coinRespawnQueue[i]; coinRespawnQueue.splice(i,1);
+      const p = randomDrivablePoint();
+      if (item.kind === "boost"){ const msg = { type:"boostRespawn", id:item.id, x:p.x, y:p.y }; applyBoostRespawn(msg); hostBroadcast(msg); }
+      else if (item.kind === "elec"){ const msg = { type:"elecRespawn", id:item.id, x:p.x, y:p.y }; applyElecRespawn(msg); hostBroadcast(msg); }
+      else { const msg = { type:"coinRespawn", id:item.id, x:p.x, y:p.y }; applyCoinRespawn(msg); hostBroadcast(msg); }
+    }
+  }
+}
+function applyTrailer(m){
+  const tr = trailers.find(t=>t.id===m.id); if (!tr) return;
+  tr.towedBy = m.towedBy;
+  if (m.towedBy == null){ tr.x=m.x; tr.y=m.y; tr.angle=m.angle; tr.tx=m.x; tr.ty=m.y; tr.tangle=m.angle; }
+}
+function applyDelivered(m){
+  if (m.by === self.id) self.coins += m.value;
+  floaters.push({ x:m.x, y:m.y, t:0, text:(m.bonus?"★5× +":"+")+m.value, col:m.bonus?"#ffd23f":"#5ee0a0", big:true });
+  if (m.bonus) floaters.push({ x:m.x, y:m.y-26, t:0, text:"BONUS!", col:"#ffd23f", big:true });
+}
+
+function applyIncoming(m){
+  if (m.type === "welcome"){
+    for (const id in m.players){ if (id !== self.id) upsertRemote(m.players[id]); }
+    if (m.world){
+      if (m.world.coins) for (const wc of m.world.coins){ const c=coins.find(c=>c.id===wc.id); if (c){ c.x=wc.x; c.y=wc.y; } }
+      (m.world.taken||[]).forEach(id => takenCoins.add(id));
+      if (m.world.boosts) for (const wb of m.world.boosts){ const b=fuelBoosts.find(b=>b.id===wb.id); if (b){ b.x=wb.x; b.y=wb.y; } }
+      (m.world.takenBoosts||[]).forEach(id => takenBoosts.add(id));
+      if (m.world.elecs) for (const we of m.world.elecs){ const e=elecFills.find(e=>e.id===we.id); if (e){ e.x=we.x; e.y=we.y; } }
+      (m.world.takenElecs||[]).forEach(id => takenElec.add(id));
+      (m.world.trailers||[]).forEach(applyTrailer);
+    }
+    return;
+  }
+  if (m.type === "full"){ showFull(); return; }
+  if (m.type === "player"){ if (m.player.id !== self.id) upsertRemote(m.player); return; }
+  if (m.type === "state"){ const r = remotes.get(m.id); if (!r) return;
+    r.x=m.x; r.y=m.y; r.angle=m.angle; r.speed=m.speed; r.fuel=m.fuel; if (typeof m.battery==="number") r.battery=m.battery; if (typeof m.coins==="number") r.coins=m.coins; return; }
+  if (m.type === "honk"){ const r = remotes.get(m.id); if (r){ rings.push({x:r.x,y:r.y,t:0}); playMariachi(); } return; }
+  if (m.type === "taken"){ applyTaken(m); return; }
+  if (m.type === "coinRespawn"){ applyCoinRespawn(m); return; }
+  if (m.type === "boostTaken"){ applyBoostTaken(m); return; }
+  if (m.type === "boostRespawn"){ applyBoostRespawn(m); return; }
+  if (m.type === "elecTaken"){ applyElecTaken(m); return; }
+  if (m.type === "elecRespawn"){ applyElecRespawn(m); return; }
+  if (m.type === "trailer"){ applyTrailer(m); return; }
+  if (m.type === "delivered"){ applyDelivered(m); return; }
+  if (m.type === "chat"){ if (m.id !== self.id) addChatLine(m.name, m.color, m.text); return; }
+  if (m.type === "gift"){ applyGift(m); return; }
+  if (m.type === "swapReq"){ if (m.to === self.id) receiveSwapReq(m); return; }
+  if (m.type === "swapOk"){ if (m.from === self.id) finalizeSwapInitiator(m); return; }
+  if (m.type === "swapNo"){ if (m.from === self.id){ addSysLine(`↔ ${esc(m.toName)} declined your swap.`); } return; }
+  if (m.type === "left"){ remotes.delete(m.id); refreshPlayerList(); if (cmd.active) cancelIfPartnerGone(m.id); return; }
+}
+function upsertRemote(p){
+  let r = remotes.get(p.id);
+  if (!r){ r = { rx:p.x, ry:p.y, rangle:p.angle }; remotes.set(p.id, r); }
+  r.id=p.id; r.name=p.name; r.config=p.config||{}; r.x=p.x; r.y=p.y; r.angle=p.angle;
+  r.speed=p.speed||0; r.fuel=p.fuel ?? 100; r.coins=p.coins ?? 0; r.maxFuel=maxFuelFor(r.config);
+  r.propulsion=(r.config&&r.config.propulsion)||"fuel"; r.battery=p.battery ?? 0; r.maxBattery=maxBatteryFor(r.config);
+  refreshPlayerList();
+}
+function showFull(){ document.getElementById("fullMsg").style.display="flex"; try { if (net.peer) net.peer.destroy(); } catch {} }
+function showDisconnected(msg){ const el=document.getElementById("fullMsg"); el.querySelector("h1").textContent="Disconnected"; el.querySelector(".subtitle").textContent=msg; el.style.display="flex"; }
+function setStatus(ok){ statusEl.classList.toggle("bad", !ok); statusText.textContent = ok ? (net.isHost?"connected · host":"connected") : "disconnected"; }
+
+/* =====================================================================
+   HORN — mariachi trumpet fanfare (WebAudio)
+   ===================================================================== */
+let audioCtx = null;
+function trumpet(freq, at, dur, vol){
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  const lfo = audioCtx.createOscillator(), lg = audioCtx.createGain();
+  o.type = "sawtooth"; o.frequency.value = freq;
+  lfo.type = "sine"; lfo.frequency.value = 6.5; lg.gain.value = freq*0.009;
+  lfo.connect(lg); lg.connect(o.frequency);
+  g.gain.setValueAtTime(0.0001, at);
+  g.gain.linearRampToValueAtTime(vol, at+0.02);
+  g.gain.linearRampToValueAtTime(vol*0.85, at+dur*0.6);
+  g.gain.exponentialRampToValueAtTime(0.0001, at+dur);
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start(at); o.stop(at+dur+0.03); lfo.start(at); lfo.stop(at+dur+0.03);
+}
+function playMariachi(){
+  try {
+    audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const t = audioCtx.currentTime;
+    // "¡Ta-ta-ta-TAA... ta-ta-TAA!"  — arpeggio up then a cheeky tag
+    const mel = [
+      [392,0.00,0.12],[523,0.12,0.12],[659,0.24,0.12],[784,0.36,0.20],
+      [659,0.58,0.11],[523,0.69,0.11],[587,0.82,0.12],[523,0.96,0.30],
+    ];
+    for (const [f,s,d] of mel){ trumpet(f, t+s, d, 0.09); trumpet(f*0.8, t+s, d, 0.05); } // parallel thirds
+  } catch {}
+}
+function honk(){ rings.push({ x:self.x, y:self.y, t:0 }); playMariachi(); net.sendHonk(); }
+
+/* =====================================================================
+   PLAYER LIST HUD
+   ===================================================================== */
+const playersEl = document.getElementById("players");
+function refreshPlayerList(){
+  const rows = [];
+  const mk = (name,color,you) => `<div class="pchip"><span class="pdot" style="background:${color}"></span>${name}${you?" <span style='color:#8496a6'>(you)</span>":""}</div>`;
+  if (self) rows.push(mk(self.name, self.config.color, true));
+  for (const r of remotes.values()) rows.push(mk(r.name||"Traveler", (r.config&&r.config.color)||"#888", false));
+  playersEl.innerHTML = rows.join("");
+}
+
+/* =====================================================================
+   GAME LOOP
+   ===================================================================== */
+function beginGame(){
+  if (playing) return;
+  playing = true; lobby.style.display = "none";
+  document.getElementById("chat").style.display = "block";
+  if (touchMode) document.getElementById("touchCtrls").style.display = "flex";
+  buildMinimap(); refreshPlayerList(); reveal(self.x, self.y);
+  requestAnimationFrame(loop);
+}
+let last = performance.now(), sendAcc = 0;
+function loop(now){
+  const dt = Math.min((now-last)/1000, 0.05); last = now; clock += dt;
+  const f = dt*60;
+  update(dt, f); processCoinRespawns(); render();
+  sendAcc += dt;
+  if (sendAcc >= 0.06){ sendAcc = 0; net.sendState({ x:self.x, y:self.y, angle:self.angle, speed:self.speed, fuel:self.fuel, battery:self.battery, coins:self.coins }); }
+  requestAnimationFrame(loop);
+}
+
+const VAN_R = 18;
+function blocked(x,y){
+  if (x<VAN_R || y<VAN_R || x>WORLD_W-VAN_R || y>WORLD_H-VAN_R) return true;
+  if (inPond(x,y,VAN_R-4)) return true;
+  for (const b of buildings){
+    const cx = clamp(x, b.x, b.x+b.w), cy = clamp(y, b.y, b.y+b.h);
+    const dx = x-cx, dy = y-cy; if (dx*dx+dy*dy < VAN_R*VAN_R) return true;
+  }
+  return false;
+}
+
+/* ---- autopilot for tap/click-to-drive ---- */
+function angDiff(a,b){ let d=(a-b)%(Math.PI*2); if (d<-Math.PI) d+=Math.PI*2; if (d>Math.PI) d-=Math.PI*2; return d; }
+function autoForward(s, dt){
+  if (s.hitchIntent){
+    const tr=trailers.find(t=>t.id===s.hitchIntent);
+    if (!tr || tr.towedBy) s.hitchIntent=null;
+    else if (Math.hypot(tr.tx-s.x, tr.ty-s.y) < HITCH_R){ net.hitch(tr.id); s.hitchIntent=null; s.waypoints.length=0; return { throttle:0, steer:0 }; }
+  }
+  const wp=s.waypoints[0];
+  const dx=wp.x-s.x, dy=wp.y-s.y, dist=Math.hypot(dx,dy);
+  const reach = s.waypoints.length>1 ? 34 : 20;
+  if (dist < reach){ s.waypoints.shift(); s.stuckT=0; return { throttle:0, steer:0 }; }
+  const err=angDiff(Math.atan2(dy,dx), s.angle);
+  const steer=clamp(err*2.2, -1, 1);
+  const throttle = Math.abs(err) > 1.5 ? 0.28 : (dist < 80 ? 0.6 : 1);
+  if (Math.abs(s.speed) < 0.06) s.stuckT += dt; else s.stuckT = 0;
+  if (s.stuckT > 1.6){ s.waypoints.length=0; s.reverseTarget=null; s.hitchIntent=null; s.stuckT=0; return { throttle:0, steer:0 }; }
+  return { throttle, steer };
+}
+function autoReverse(s){
+  const t=s.reverseTarget;
+  const dx=t.x-s.x, dy=t.y-s.y, dist=Math.hypot(dx,dy);
+  if (dist < 20){ s.reverseTarget=null; return { throttle:0, steer:0 }; }
+  const err=angDiff(Math.atan2(-dy,-dx), s.angle);   // face away so the rear points at the target
+  return { throttle:-1, steer: clamp(err*2.0, -1, 1) };
+}
+
+function update(dt, f){
+  const s = self;
+  pollGamepad();   // read Bluetooth/USB controller into s.padThrottle/padSteer/padBoost/padFuel/padHitch each frame
+  const kT = (keys.has("arrowup")||keys.has("w")?1:0) - (keys.has("arrowdown")||keys.has("s")?1:0);
+  const kS = (keys.has("arrowright")||keys.has("d")?1:0) - (keys.has("arrowleft")||keys.has("a")?1:0);
+  let throttle = clamp(kT + (s.padThrottle||0), -1, 1);      // keyboard + gamepad blended
+  let steer    = clamp(kS + (s.padSteer||0), -1, 1);
+  if (Math.abs(throttle) > 0.06 || Math.abs(steer) > 0.06){ s.waypoints.length=0; s.reverseTarget=null; s.hitchIntent=null; s.stuckT=0; }  // manual overrides autopilot
+  else if (s.reverseTarget){ const a=autoReverse(s); throttle=a.throttle; steer=a.steer; }
+  else if (s.waypoints.length){ const a=autoForward(s, dt); throttle=a.throttle; steer=a.steer; }
+  const prop = s.propulsion;
+  const hasEnergy = prop === "electric" ? (s.battery >= 0.1)
+                  : prop === "hybrid"   ? (s.fuel > 0 || s.battery >= 0.1)  // hybrid runs on gas OR battery (need ≥0.1)
+                  : (s.fuel > 0);
+  s.evMode = (prop === "hybrid" && s.fuel <= 0 && s.maxBattery > 0);         // hybrid running on battery only
+  const boosting = (s.boost || s.padBoost) && throttle > 0 && hasEnergy;     // double-tap-hold accelerator, or gamepad bumper
+  s.boosting = boosting;
+  // per-propulsion boost top speed (mph = speed*11): fuel boost is 4.6*1.25, hybrid +5mph, electric +20mph
+  const FBOOST = 4.6 * 1.25;
+  const boostTop = prop === "electric" ? FBOOST + 20/11 : prop === "hybrid" ? FBOOST + 5/11 : FBOOST;
+  const MAXSPD = boosting ? boostTop : 4.6;
+  const accel = hasEnergy ? (boosting ? MAXSPD*0.045 : 0.16) : 0;
+  if (throttle > 0) s.speed += accel*throttle*f;
+  else if (throttle < 0) s.speed += 0.12*throttle*f;
+  s.speed *= Math.pow(0.965, f);
+  s.speed = clamp(s.speed, -MAXSPD*0.5, MAXSPD);
+  if (Math.abs(s.speed) < 0.01) s.speed = 0;
+  if (Math.abs(s.speed) > 0.05){
+    const grip = s.config.rearTires === "4x4" ? 0.050 : 0.044;
+    s.angle += steer * grip * (s.speed/MAXSPD) * f * (s.speed<0?-1:1);
+  }
+  const vx = Math.cos(s.angle)*s.speed*f, vy = Math.sin(s.angle)*s.speed*f;
+  if (!blocked(s.x+vx, s.y)) s.x += vx; else s.speed *= 0.35;
+  if (!blocked(s.x, s.y+vy)) s.y += vy; else s.speed *= 0.35;
+  // sustained forward throttle (>1s) is 25% more efficient; boost is less efficient (per propulsion)
+  if (throttle > 0) s.throttleHold += dt; else s.throttleHold = 0;
+  s.cruise = s.throttleHold > 1;
+  if (throttle !== 0 && hasEnergy){
+    let mult = fuelFactor(s.config);
+    const boostConsum = prop === "electric" ? 1.25*1.15 : prop === "hybrid" ? 1.25*1.10 : 1.25;   // boost efficiency
+    if (boosting) mult *= boostConsum;
+    else if (s.cruise) mult *= 0.75;
+    const stdBurn = (Math.abs(s.speed)*0.006*f + 0.004*f) * mult;   // an equivalent fuel vehicle's burn
+    if (prop === "fuel"){
+      s.fuel = Math.max(0, s.fuel - stdBurn);
+    } else if (prop === "hybrid"){
+      if (s.fuel > 0){
+        s.fuel = Math.max(0, s.fuel - stdBurn*0.5);                 // on gas: half the fuel...
+        s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20);      // ...plus 1 electricity per 20 fuel
+      } else {
+        s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20 * 1.5);// electric-only: drains 50% faster
+      }
+    } else { // electric
+      s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20);        // same drain rate as a hybrid
+    }
+  }
+  // ---- solar charging: 1 energy per in-game daylight hour per panel (hybrid/electric) ----
+  s.solarCharging = false;
+  if (s.maxBattery > 0 && s.solarPanels > 0 && s.battery < s.maxBattery){
+    const daylight = 1 - nightAmount();                            // 0 at night .. 1 full day
+    if (daylight > 0.02){
+      const gain = s.solarPanels * daylight * (dt / (MIN_PER_HOUR/1000));   // 60 real s == 1 in-game hour
+      s.battery = Math.min(s.maxBattery, s.battery + gain);
+      s.solarAccum += gain; s.solarCharging = true;
+      if (s.solarAccum >= 1){ s.solarAccum -= 1; s.batteryPulseT = 0; }     // trigger a "+1" pop on the bar
+    }
+  }
+  if (s.batteryPulseT < 2) s.batteryPulseT += dt;
+
+  // ---- fuel stations: hold F, 25 coins per fill session ----
+  let atStation = false;
+  for (const st of stations){ const dx=s.x-st.x, dy=s.y-st.y; if (dx*dx+dy*dy < STATION_R*STATION_R){ atStation=true; break; } }
+  s.atStation = atStation; s.fuelMsg = "";
+  const fuelBtn = keys.has("f") || s.fuelHold || s.padFuel;
+  const wantFuel = atStation && fuelBtn && s.fuel < s.maxFuel;
+  if (wantFuel && !s.fuelSession){
+    if (s.coins >= 25){ s.coins -= 25; s.fuelSession = true; floaters.push({ x:s.x, y:s.y-30, t:0, text:"-25", col:"#ff9a76" }); }
+    else s.fuelMsg = "Need 25 coins";
+  }
+  if (s.fuelSession){
+    if (atStation && fuelBtn && s.fuel < s.maxFuel) s.fuel = Math.min(s.maxFuel, s.fuel + 34*dt);
+    else s.fuelSession = false;
+  }
+  s.refueling = s.fuelSession;
+
+  // ---- battery chargers: hold F, 25 coins per session, charges 10x slower than fueling (hybrid/electric) ----
+  let atCharger = false;
+  for (const ch of chargers){ const dx=s.x-ch.x, dy=s.y-ch.y; if (dx*dx+dy*dy < CHARGER_R*CHARGER_R){ atCharger=true; break; } }
+  s.atCharger = atCharger; s.chargeMsg = "";
+  const wantCharge = atCharger && fuelBtn && s.maxBattery > 0 && s.battery < s.maxBattery;
+  if (wantCharge && !s.chargeSession){
+    if (s.coins >= 25){ s.coins -= 25; s.chargeSession = true; floaters.push({ x:s.x, y:s.y-30, t:0, text:"-25", col:"#ff9a76" }); }
+    else s.chargeMsg = "Need 25 coins";
+  }
+  if (s.chargeSession){
+    if (atCharger && fuelBtn && s.battery < s.maxBattery) s.battery = Math.min(s.maxBattery, s.battery + 3.4*dt);   // 1/10 of the 34/s fuel rate
+    else s.chargeSession = false;
+  }
+  s.charging = s.chargeSession;
+
+  // ---- coin + fuel-boost + electric-fill pickups (host decides who actually gets it) ----
+  for (const c of coins){ if (takenCoins.has(c.id) || requestedCoins.has(c.id)) continue;
+    const dx=s.x-c.x, dy=s.y-c.y; if (dx*dx+dy*dy < COIN_R*COIN_R){ requestedCoins.add(c.id); net.grabCoin(c.id); }
+  }
+  for (const b of fuelBoosts){ if (takenBoosts.has(b.id) || requestedBoosts.has(b.id)) continue;
+    const dx=s.x-b.x, dy=s.y-b.y; if (dx*dx+dy*dy < COIN_R*COIN_R){ requestedBoosts.add(b.id); net.grabBoost(b.id); }
+  }
+  for (const e of elecFills){ if (takenElec.has(e.id) || requestedElec.has(e.id)) continue;
+    const dx=s.x-e.x, dy=s.y-e.y; if (s.maxBattery > 0 && dx*dx+dy*dy < COIN_R*COIN_R){ requestedElec.add(e.id); net.grabElec(e.id); }   // battery vehicles only
+  }
+
+  // ---- trailer hitch / drop (hold T ~0.35s) ----
+  const myTrailer = trailers.find(t=>t.towedBy===self.id);
+  if (keys.has("t") || s.padHitch) s.tHold += dt; else { s.tHold = 0; s.tConsumed = false; }
+  if (!s.tConsumed && s.tHold >= 0.35){
+    s.tConsumed = true;
+    if (myTrailer){ net.drop(myTrailer.id, myTrailer.tx, myTrailer.ty, myTrailer.tangle); }
+    else {
+      let best=null, bd=1e9;
+      for (const tr of trailers){ if (tr.towedBy) continue; const d=(tr.tx-s.x)**2+(tr.ty-s.y)**2; if (d<HITCH_R*HITCH_R && d<bd){ best=tr; bd=d; } }
+      if (best) net.hitch(best.id);
+    }
+  }
+
+  const warnEl = document.getElementById("warn");
+  const dead = s.propulsion === "electric" ? (s.battery < 0.1)
+             : s.propulsion === "hybrid"   ? (s.fuel <= 0 && s.battery < 0.1)
+             : (s.fuel <= 0);
+  if (dead && Math.abs(s.speed) < 0.2){
+    warnEl.textContent = s.propulsion === "electric" ? "BATTERY DEAD — sit in the sun with a solar panel ☀"
+                       : s.propulsion === "hybrid"   ? "OUT OF POWER — refuel ⛽ or recharge ⚡"
+                       : "OUT OF FUEL — grab coins & get to a ⛽";
+    warnEl.style.display = "block";
+  } else warnEl.style.display = "none";
+  reveal(s.x, s.y);
+
+  // remotes easing
+  for (const r of remotes.values()){
+    r.rx = lerp(r.rx, r.x, Math.min(1, 0.22*f));
+    r.ry = lerp(r.ry, r.y, Math.min(1, 0.22*f));
+    r.rangle = lerpAngle(r.rangle, r.angle, Math.min(1, 0.22*f));
+  }
+  // trailer follow
+  for (const tr of trailers){
+    if (tr.towedBy){
+      let tx,ty,ta,cfg;
+      if (tr.towedBy===self.id){ tx=self.x; ty=self.y; ta=self.angle; cfg=self.config; }
+      else { const r=remotes.get(tr.towedBy); if(!r) continue; tx=r.rx; ty=r.ry; ta=r.rangle; cfg=r.config; }
+      const back = vanLength(cfg)/2 + 12 + TRAILER_LEN/2;
+      tr.tx = lerp(tr.tx, tx - Math.cos(ta)*back, Math.min(1,0.35*f));
+      tr.ty = lerp(tr.ty, ty - Math.sin(ta)*back, Math.min(1,0.35*f));
+      tr.tangle = lerpAngle(tr.tangle, ta, Math.min(1,0.3*f));
+    } else { tr.tx = tr.x; tr.ty = tr.y; tr.tangle = tr.angle; }
+  }
+
+  cam.x = lerp(cam.x, s.x, Math.min(1,0.12*f));
+  cam.y = lerp(cam.y, s.y, Math.min(1,0.12*f));
+  for (let i=rings.length-1;i>=0;i--){ rings[i].t += dt; if (rings[i].t>0.7) rings.splice(i,1); }
+  for (let i=floaters.length-1;i>=0;i--){ floaters[i].t += dt; if (floaters[i].t>1.1) floaters.splice(i,1); }
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+function render(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.clearRect(0,0,VW,VH);
+  const ox = VW/2 - cam.x, oy = VH/2 - cam.y;
+  const vL = cam.x-VW/2-70, vR = cam.x+VW/2+70, vT = cam.y-VH/2-70, vB = cam.y+VH/2+70;
+  const vis = (x,y,pad=60) => x>vL-pad && x<vR+pad && y>vT-pad && y<vB+pad;
+
+  ctx.save(); ctx.translate(ox, oy);
+
+  // ground: countryside grass + city asphalt block
+  ctx.fillStyle = "#2f6b3f"; ctx.fillRect(0,0,WORLD_W,WORLD_H);
+  ctx.fillStyle = "#26303c"; ctx.fillRect(CITY.x0-40, CITY.y0-40, (CITY.x1-CITY.x0)+80, (CITY.y1-CITY.y0)+80);
+  ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 8; ctx.strokeRect(0,0,WORLD_W,WORLD_H);
+
+  // pond
+  ctx.fillStyle = "#2b6c8f"; ctx.beginPath(); ctx.arc(pond.x, pond.y, pond.r, 0, 7); ctx.fill();
+  ctx.strokeStyle = "#255c78"; ctx.lineWidth = 6; ctx.stroke();
+  ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.beginPath(); ctx.arc(pond.x-pond.r*0.3, pond.y-pond.r*0.3, pond.r*0.5, 0, 7); ctx.fill();
+
+  // straight roads
+  for (const r of roads){
+    if (r.x>vR||r.x+r.w<vL||r.y>vB||r.y+r.h<vT) continue;
+    ctx.fillStyle = "#3a4350"; ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = "rgba(255,214,120,0.5)"; ctx.lineWidth = 3; ctx.setLineDash([16,16]); ctx.beginPath();
+    if (r.w > r.h){ ctx.moveTo(r.x, r.y+r.h/2); ctx.lineTo(r.x+r.w, r.y+r.h/2); }
+    else { ctx.moveTo(r.x+r.w/2, r.y); ctx.lineTo(r.x+r.w/2, r.y+r.h); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  // curved roads
+  for (const c of roadCurves){
+    ctx.strokeStyle = "#3a4350"; ctx.lineWidth = c.w; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke();
+    ctx.strokeStyle = "rgba(255,214,120,0.5)"; ctx.lineWidth = 3; ctx.setLineDash([16,16]);
+    ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = "butt";
+  }
+
+  // delivery drop-zones
+  for (const z of dropZones){
+    if (!vis(z.x,z.y,z.r)) continue;
+    const pulse = 0.10 + 0.05*Math.sin(clock*2 + z.x);
+    ctx.fillStyle = `rgba(94,224,160,${pulse})`; ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,7); ctx.fill();
+    ctx.strokeStyle = "rgba(94,224,160,0.7)"; ctx.lineWidth = 3; ctx.setLineDash([10,8]); ctx.beginPath(); ctx.arc(z.x,z.y,z.r,0,7); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "#0d1117"; roundRect(ctx, z.x-46, z.y-16, 92, 32, 8); ctx.globalAlpha=0.7; ctx.fill(); ctx.globalAlpha=1;
+    ctx.fillStyle = "#5ee0a0"; ctx.font = "700 15px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText("DROP +"+z.value, z.x, z.y+1);
+  }
+
+  // fuel stations
+  for (const st of stations){
+    if (!vis(st.x,st.y,STATION_R)) continue;
+    ctx.fillStyle = "rgba(255,176,58,0.14)"; ctx.beginPath(); ctx.arc(st.x, st.y, STATION_R, 0, 7); ctx.fill();
+    ctx.fillStyle = "#2b3440"; roundRect(ctx, st.x-34, st.y-26, 68, 52, 8); ctx.fill();
+    ctx.fillStyle = "#ffb03a"; roundRect(ctx, st.x-12, st.y-20, 24, 34, 4); ctx.fill();
+    ctx.fillStyle = "#20262e"; ctx.font = "bold 22px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⛽", st.x, st.y-2);
+    ctx.fillStyle="#ffd98a"; ctx.font="600 11px system-ui"; ctx.fillText("FUEL", st.x, st.y+20);
+  }
+
+  // battery chargers
+  for (const ch of chargers){
+    if (!vis(ch.x,ch.y,CHARGER_R)) continue;
+    ctx.fillStyle = "rgba(79,209,197,0.14)"; ctx.beginPath(); ctx.arc(ch.x, ch.y, CHARGER_R, 0, 7); ctx.fill();
+    ctx.fillStyle = "#233b3a"; roundRect(ctx, ch.x-30, ch.y-26, 60, 52, 8); ctx.fill();
+    ctx.fillStyle = "#4fd1c5"; roundRect(ctx, ch.x-11, ch.y-20, 22, 30, 4); ctx.fill();
+    ctx.fillStyle = "#0d2a28"; ctx.font = "bold 20px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⚡", ch.x, ch.y-4);
+    ctx.fillStyle="#9ff0e6"; ctx.font="600 10px system-ui"; ctx.fillText("CHARGE", ch.x, ch.y+20);
+  }
+
+  // buildings
+  for (const b of buildings){
+    if (b.x>vR||b.x+b.w<vL||b.y>vB||b.y+b.h<vT) continue;
+    ctx.fillStyle = "rgba(0,0,0,0.28)"; roundRect(ctx, b.x+3, b.y+4, b.w, b.h, 4); ctx.fill();
+    ctx.fillStyle = b.color; roundRect(ctx, b.x, b.y, b.w, b.h, 4); ctx.fill();
+    if (b.silo){ ctx.fillStyle="#caa15a"; ctx.beginPath(); ctx.arc(b.x+b.w/2,b.y+b.h/2,b.w/2,0,7); ctx.fill(); }
+    else if (b.roof){ ctx.fillStyle = shade(b.color,0.14); roundRect(ctx, b.x+6,b.y+6,b.w-12,b.h-12,3); ctx.fill(); }
+  }
+
+  // foliage
+  for (const t of trees){
+    if (!vis(t.x,t.y,t.r)) continue;
+    ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.beginPath(); ctx.arc(t.x+2,t.y+3,t.r,0,7); ctx.fill();
+    ctx.fillStyle = t.c; ctx.beginPath(); ctx.arc(t.x,t.y,t.r,0,7); ctx.fill();
+    ctx.fillStyle = shade(t.c,0.15); ctx.beginPath(); ctx.arc(t.x-t.r*0.3,t.y-t.r*0.3,t.r*0.42,0,7); ctx.fill();
+  }
+
+  // coins
+  for (const c of coins){ if (takenCoins.has(c.id) || !vis(c.x,c.y,20)) continue;
+    const bob = Math.sin(clock*4 + c.x*0.05)*2;
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(c.x, c.y+9, 7, 3, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#ffd23f"; ctx.beginPath(); ctx.arc(c.x, c.y+bob, 8, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#c99a17"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#c99a17"; ctx.font = "700 10px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("$", c.x, c.y+bob+0.5);
+  }
+
+  // fuel boosts (+25 fuel)
+  for (const b of fuelBoosts){ if (takenBoosts.has(b.id) || !vis(b.x,b.y,22)) continue;
+    const bob = Math.sin(clock*4 + b.x*0.05)*2;
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(b.x, b.y+11, 8, 3, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#2bb8a3"; roundRect(ctx, b.x-8, b.y-9+bob, 16, 18, 3); ctx.fill();
+    ctx.strokeStyle = "#1c8577"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#1c8577"; ctx.fillRect(b.x-4, b.y-13+bob, 8, 4);   // cap
+    ctx.fillStyle = "#e6fff9"; ctx.font = "800 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("+", b.x, b.y+bob+1);
+  }
+
+  // electric fills (+1 battery)
+  for (const e of elecFills){ if (takenElec.has(e.id) || !vis(e.x,e.y,20)) continue;
+    const bob = Math.sin(clock*4 + e.x*0.05)*2;
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(e.x, e.y+10, 8, 3, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#4fd1c5"; ctx.beginPath(); ctx.arc(e.x, e.y+bob, 9, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#2a9d8f"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = "#0d2a28"; ctx.font = "800 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⚡", e.x, e.y+bob+1);
+  }
+
+  // trailers (draw before vans)
+  for (const tr of trailers){ if (!vis(tr.tx,tr.ty,60)) continue; drawTrailer(tr); }
+
+  // vans (remotes then self)
+  for (const r of remotes.values()) drawWorldVan(r.rx, r.ry, r.rangle, r.config||{}, r.name, r.fuel, maxFuelFor(r.config||{}), r.battery, maxBatteryFor(r.config||{}), false);
+  if (self.boosting){                                  // speed streaks behind the van
+    ctx.strokeStyle = "rgba(255,150,80,0.5)"; ctx.lineWidth = 3; ctx.lineCap = "round";
+    const bx = self.x - Math.cos(self.angle)*24, by = self.y - Math.sin(self.angle)*24;
+    for (const o of [-8, 0, 8]){ const px = bx - Math.sin(self.angle)*o, py = by + Math.cos(self.angle)*o;
+      ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - Math.cos(self.angle)*12, py - Math.sin(self.angle)*12); ctx.stroke(); }
+    ctx.lineCap = "butt";
+  }
+  drawWorldVan(self.x, self.y, self.angle, self.config, self.name, self.fuel, self.maxFuel, self.battery, self.maxBattery, true);
+
+  // route markers (tap-to-drive)
+  if (self.waypoints.length){
+    ctx.strokeStyle="rgba(120,220,255,0.55)"; ctx.lineWidth=2.5; ctx.setLineDash([9,9]);
+    ctx.beginPath(); ctx.moveTo(self.x, self.y); for (const p of self.waypoints) ctx.lineTo(p.x, p.y); ctx.stroke(); ctx.setLineDash([]);
+    const last=self.waypoints[self.waypoints.length-1];
+    ctx.fillStyle="rgba(120,220,255,0.95)"; ctx.beginPath(); ctx.arc(last.x, last.y, 7, 0, 7); ctx.fill();
+    ctx.strokeStyle="#0d1117"; ctx.lineWidth=2; ctx.stroke();
+  }
+  if (self.reverseTarget){
+    const t=self.reverseTarget; ctx.strokeStyle="rgba(255,120,90,0.95)"; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.arc(t.x, t.y, 14, 0, 7); ctx.stroke();
+    ctx.fillStyle="rgba(255,120,90,0.95)"; ctx.font="700 12px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("R", t.x, t.y);
+  }
+
+  // rings + floaters
+  for (const ef of rings){ const rad=20+ef.t*90, a=1-ef.t/0.7; ctx.strokeStyle=`rgba(255,214,120,${a*0.8})`; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(ef.x,ef.y,rad,0,7); ctx.stroke(); }
+  for (const fl of floaters){ const a=1-fl.t/1.1; ctx.globalAlpha=Math.max(0,a); ctx.fillStyle=fl.col||"#fff"; ctx.font=(fl.big?"700 22px":"700 16px")+" system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(fl.text, fl.x, fl.y-30-fl.t*40); ctx.globalAlpha=1; }
+
+  ctx.restore();
+
+  // night tint over the world (HUD drawn after stays bright)
+  const night = nightAmount();
+  if (night > 0.001){
+    ctx.fillStyle = "rgba(12,18,48," + (0.55*night).toFixed(3) + ")"; ctx.fillRect(0,0,VW,VH);
+    // auto headlights: warm light cuts through the dark (drawn additively over the tint)
+    ctx.save(); ctx.translate(ox, oy); ctx.globalCompositeOperation = "lighter";
+    for (const r of remotes.values()) if (vis(r.rx, r.ry, 150)) drawHeadlights(r.rx, r.ry, r.rangle, r.config||{}, night);
+    drawHeadlights(self.x, self.y, self.angle, self.config, night);
+    ctx.globalCompositeOperation = "source-over"; ctx.restore();
+  }
+
+  drawMinimap();
+  if (self.refueling) prompt("⛽ Refueling…", "#52c46a");
+  else if (self.charging) prompt("⚡ Charging…", "#4fd1c5");
+  else if (self.atStation && self.fuel<self.maxFuel) prompt(self.fuelMsg ? "⛽ "+self.fuelMsg : "⛽ Hold F to fuel — 25 coins", self.fuelMsg ? "#ff8b5b" : "#ffb03a");
+  else if (self.atCharger && self.maxBattery>0 && self.battery<self.maxBattery) prompt(self.chargeMsg ? "⚡ "+self.chargeMsg : "⚡ Hold F to charge — 25 coins", self.chargeMsg ? "#ff8b5b" : "#4fd1c5");
+  drawStats();
+  drawTimeOfDay();
+  if (touchMode) updateTouchButtons();
+}
+
+function drawHeadlights(x, y, angle, config, a){
+  // soft glow around the vehicle so it's a little lit up
+  let g = ctx.createRadialGradient(x, y, 4, x, y, 44);
+  g.addColorStop(0, "rgba(255,244,205," + (0.22*a).toFixed(3) + ")");
+  g.addColorStop(1, "rgba(255,244,205,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 44, 0, 7); ctx.fill();
+  // forward beam from the front of the van
+  const L = vanLength(config)/2;
+  ctx.save(); ctx.translate(x + Math.cos(angle)*L, y + Math.sin(angle)*L); ctx.rotate(angle);
+  const beamLen = 130, beamW = 52;
+  const bg = ctx.createLinearGradient(0, 0, beamLen, 0);
+  bg.addColorStop(0, "rgba(255,238,185," + (0.34*a).toFixed(3) + ")");
+  bg.addColorStop(1, "rgba(255,238,185,0)");
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(beamLen, -beamW/2); ctx.lineTo(beamLen, beamW/2); ctx.lineTo(0, 8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function drawWorldVan(x,y,angle,config,name,fuel,maxFuel,battery,maxBattery,isSelf){
+  ctx.save(); ctx.translate(x,y); ctx.rotate(angle); drawVan(ctx, config); ctx.restore();
+  ctx.textAlign="center"; ctx.textBaseline="alphabetic"; ctx.font="600 12px system-ui";
+  const top = y - 34;
+  ctx.fillStyle="rgba(0,0,0,0.45)"; const tw=ctx.measureText(name||"Traveler").width+12; roundRect(ctx, x-tw/2, top-14, tw, 16, 6); ctx.fill();
+  ctx.fillStyle = isSelf ? "#ffe08a" : "#eef2f6"; ctx.fillText(name||"Traveler", x, top-2);
+  // energy bar: electric shows battery, others show fuel
+  const prop = (config && config.propulsion) || "fuel";
+  let ratio, col;
+  if (prop === "electric"){ ratio = clamp((battery||0)/(maxBattery||10),0,1); col = ratio>0.5?"#4fd1c5":ratio>0.2?"#f1c40f":"#ff6b5b"; }
+  else { ratio = clamp((fuel||0)/(maxFuel||100),0,1); col = ratio>0.5?"#52c46a":ratio>0.2?"#f1c40f":"#ff6b5b"; }
+  const bw=34, bh=5;
+  ctx.fillStyle="rgba(0,0,0,0.5)"; roundRect(ctx, x-bw/2, top+4, bw, bh, 3); ctx.fill();
+  ctx.fillStyle = col; roundRect(ctx, x-bw/2, top+4, bw*ratio, bh, 3); ctx.fill();
+}
+
+function drawTrailer(tr){
+  const towed = !!tr.towedBy;
+  if (towed){
+    let tx,ty;
+    if (tr.towedBy===self.id){ tx=self.x; ty=self.y; } else { const r=remotes.get(tr.towedBy); if(r){ tx=r.rx; ty=r.ry; } }
+    if (tx!=null){ ctx.strokeStyle="#3a3f47"; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(tr.tx,tr.ty); ctx.lineTo(tx,ty); ctx.stroke(); }
+  }
+  ctx.save(); ctx.translate(tr.tx, tr.ty); ctx.rotate(tr.tangle);
+  const L=TRAILER_LEN, W=TRAILER_W;
+  ctx.fillStyle="rgba(0,0,0,0.22)"; roundRect(ctx,-L/2+2,-W/2+3,L,W,5); ctx.fill();
+  ctx.fillStyle="#111"; for (const ax of [-L/2+14, -L/2+30]) for (const s of [-1,1]) wheel(ctx, ax, s*(W/2+1), 13, 6);
+  ctx.fillStyle="#4a525e"; roundRect(ctx,-L/2,-W/2,L,W,5); ctx.fill();
+  ctx.strokeStyle="#2c333c"; ctx.lineWidth=2; ctx.stroke();
+  // supply crates
+  const crates=[["#b8863f",-L/2+10,-6,16,16],["#9c6f34",-L/2+30,-8,14,18],["#c9a24a",-L/2+8,-W/2+3,14,12]];
+  for (const [col,cx,cy,cw,ch] of crates){ ctx.fillStyle=col; roundRect(ctx,cx,cy,cw,ch,2); ctx.fill(); ctx.strokeStyle="rgba(0,0,0,0.3)"; ctx.lineWidth=1; ctx.stroke(); }
+  // tongue toward the van (+x)
+  ctx.strokeStyle="#3a3f47"; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(L/2,0); ctx.lineTo(L/2+12,0); ctx.stroke();
+  ctx.fillStyle="#2c333c"; ctx.beginPath(); ctx.arc(L/2+12,0,4,0,7); ctx.fill();
+  ctx.restore();
+}
+
+/* ---------- minimap ---------- */
+const MM_W = 240, MM_H = Math.round(MM_W * WORLD_H/WORLD_W);
+const mmCanvas = document.createElement("canvas");
+const mmScale = MM_W/WORLD_W;
+function buildMinimap(){
+  mmCanvas.width = MM_W; mmCanvas.height = MM_H;
+  const m = mmCanvas.getContext("2d"), s = mmScale;
+  m.fillStyle="#2f6b3f"; m.fillRect(0,0,MM_W,MM_H);
+  m.fillStyle="#26303c"; m.fillRect((CITY.x0-40)*s,(CITY.y0-40)*s,((CITY.x1-CITY.x0)+80)*s,((CITY.y1-CITY.y0)+80)*s);
+  m.fillStyle="#2b6c8f"; m.beginPath(); m.arc(pond.x*s, pond.y*s, pond.r*s, 0, 7); m.fill();
+  m.fillStyle="#4a5563"; for (const r of roads) m.fillRect(r.x*s, r.y*s, r.w*s, r.h*s);
+  m.strokeStyle="#4a5563"; m.lineWidth=Math.max(1,72*s); for (const c of roadCurves){ m.beginPath(); m.moveTo(c.x0*s,c.y0*s); m.quadraticCurveTo(c.cx*s,c.cy*s,c.x1*s,c.y1*s); m.stroke(); }
+}
+function drawMinimap(){
+  const x0 = VW - MM_W - 14, y0 = VH - MM_H - 14;
+  ctx.save();
+  ctx.fillStyle="rgba(10,15,22,0.85)"; roundRect(ctx, x0-6, y0-6, MM_W+12, MM_H+12, 10); ctx.fill();
+  ctx.strokeStyle="rgba(255,255,255,0.14)"; ctx.lineWidth=1; ctx.stroke();
+  roundRect(ctx, x0, y0, MM_W, MM_H, 6); ctx.save(); ctx.clip();
+  ctx.drawImage(mmCanvas, x0, y0);
+  const cw = MM_W/FCOLS, ch = MM_H/FROWS;
+  ctx.fillStyle="rgba(9,13,19,0.92)";
+  for (let gy=0; gy<FROWS; gy++) for (let gx=0; gx<FCOLS; gx++){ if (!explored[gy*FCOLS+gx]) ctx.fillRect(x0+gx*cw, y0+gy*ch, cw+0.6, ch+0.6); }
+  // objective markers (always visible)
+  for (const z of dropZones){ ctx.fillStyle="#5ee0a0"; ctx.beginPath(); ctx.arc(x0+z.x*mmScale, y0+z.y*mmScale, 3.2, 0, 7); ctx.fill(); }
+  for (const b of fuelBoosts){ if (takenBoosts.has(b.id)) continue; ctx.fillStyle="#2bb8a3"; ctx.fillRect(x0+b.x*mmScale-2.2, y0+b.y*mmScale-2.2, 4.4, 4.4); }
+  for (const st of stations){ ctx.fillStyle="#ffb03a"; ctx.beginPath(); ctx.arc(x0+st.x*mmScale, y0+st.y*mmScale, 2.6, 0, 7); ctx.fill(); }
+  for (const ch of chargers){ ctx.fillStyle="#4fd1c5"; ctx.beginPath(); ctx.arc(x0+ch.x*mmScale, y0+ch.y*mmScale, 2.8, 0, 7); ctx.fill(); ctx.strokeStyle="#0d2a28"; ctx.lineWidth=1; ctx.stroke(); }
+  for (const e of elecFills){ if (takenElec.has(e.id)) continue; ctx.fillStyle="#7dfbe0"; ctx.beginPath(); ctx.arc(x0+e.x*mmScale, y0+e.y*mmScale, 2.2, 0, 7); ctx.fill(); }
+  for (const tr of trailers){ ctx.fillStyle="#c9a24a"; ctx.fillRect(x0+tr.tx*mmScale-2, y0+tr.ty*mmScale-2, 4, 4); }
+  const blip=(px,py,color,me)=>{ const bx=x0+px*mmScale, by=y0+py*mmScale; if(me){ ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(bx,by,4.5,0,7); ctx.fill(); } ctx.fillStyle=color; ctx.beginPath(); ctx.arc(bx,by,me?3:3.2,0,7); ctx.fill(); };
+  for (const r of remotes.values()) blip(r.rx, r.ry, (r.config&&r.config.color)||"#fff", false);
+  blip(self.x, self.y, self.config.color, true);
+  ctx.restore();
+  ctx.fillStyle="rgba(255,255,255,0.7)"; ctx.font="600 10px system-ui"; ctx.textAlign="left"; ctx.textBaseline="alphabetic"; ctx.fillText("MAP", x0+4, y0+13);
+  ctx.restore();
+}
+
+/* ---------- coins / speed / fuel stat panel + prompt ---------- */
+function drawStats(){
+  ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+  const x0 = 16, w = 210;
+  const hasFuelBar = self.maxFuel > 0, hasBatBar = self.maxBattery > 0;
+  const nBars = (hasFuelBar?1:0) + (hasBatBar?1:0);
+  const panelH = 74 + nBars*30;
+  const y0 = VH - panelH;
+  ctx.fillStyle="rgba(10,15,22,0.82)"; roundRect(ctx, x0-8, y0-8, w+16, panelH+2, 12); ctx.fill();
+  // coins
+  ctx.fillStyle="#ffd23f"; ctx.beginPath(); ctx.arc(x0+8, y0+10, 8, 0, 7); ctx.fill();
+  ctx.fillStyle="#c99a17"; ctx.font="700 10px system-ui"; ctx.textAlign="center"; ctx.fillText("$", x0+8, y0+13.5);
+  ctx.textAlign="left"; ctx.fillStyle="#ffe08a"; ctx.font="700 20px system-ui"; ctx.fillText(self.coins + " coins", x0+24, y0+17);
+  // speed
+  const mph = Math.round(Math.abs(self.speed)*11);
+  ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText("SPEED", x0, y0+40);
+  ctx.fillStyle="#eef2f6"; ctx.font="700 20px system-ui"; ctx.fillText(mph, x0+2, y0+62);
+  ctx.fillStyle="#8496a6"; ctx.font="600 11px system-ui"; ctx.fillText("mph", x0+ (mph>=10?36:24), y0+62);
+  const sbx=x0+72, sbw=w-72;
+  ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, sbx, y0+50, sbw, 8, 4); ctx.fill();
+  ctx.fillStyle="#4fd1c5"; roundRect(ctx, sbx, y0+50, sbw*clamp(Math.abs(self.speed)/4.6,0,1), 8, 4); ctx.fill();
+  if (self.boosting){ ctx.fillStyle="#ff8b5b"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("⏩ BOOST", x0+w, y0+40); ctx.textAlign="left"; }
+  else if (self.evMode){ ctx.fillStyle="#4fd1c5"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("⚡ EV MODE", x0+w, y0+40); ctx.textAlign="left"; }
+  else if (self.cruise){ ctx.fillStyle="#5ee0a0"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("ECO · 25% less", x0+w, y0+40); ctx.textAlign="left"; }
+  // energy bars
+  let by = y0 + 82;
+  if (hasFuelBar){ drawEnergyBar(x0, by, w, "FUEL", self.fuel, self.maxFuel, false); by += 30; }
+  if (hasBatBar){ drawEnergyBar(x0, by, w, "BATTERY", self.battery, self.maxBattery, true); by += 30; }
+}
+function drawEnergyBar(x0, y, w, label, val, max, isBattery){
+  ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+  ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText(label, x0, y);
+  // charging sun by the label
+  if (isBattery && self.solarCharging){
+    const pulse = 0.55 + 0.45*Math.sin(clock*6);
+    ctx.globalAlpha = pulse; ctx.fillStyle="#ffe066"; ctx.font="700 12px system-ui";
+    ctx.fillText("☀", x0 + ctx.measureText(label).width + 8, y+1); ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, x0, y+6, w, 14, 6); ctx.fill();
+  const r = clamp(val/max, 0, 1);
+  const col = isBattery ? (r>0.5?"#4fd1c5":r>0.2?"#f1c40f":"#ff6b5b") : (r>0.5?"#52c46a":r>0.2?"#f1c40f":"#ff6b5b");
+  ctx.fillStyle = col; roundRect(ctx, x0, y+6, w*r, 14, 6); ctx.fill();
+  // shimmer sweep across the filled portion while charging
+  if (isBattery && self.solarCharging && r > 0.02){
+    ctx.save(); roundRect(ctx, x0, y+6, w*r, 14, 6); ctx.clip();
+    const gx = x0 + (w*r) * ((clock*0.5) % 1);
+    const g = ctx.createLinearGradient(gx-18, 0, gx+18, 0);
+    g.addColorStop(0,"rgba(255,255,255,0)"); g.addColorStop(0.5,"rgba(255,255,255,0.55)"); g.addColorStop(1,"rgba(255,255,255,0)");
+    ctx.fillStyle = g; ctx.fillRect(x0, y+6, w, 14); ctx.restore();
+  }
+  ctx.fillStyle="#dfe7ee"; ctx.font="600 11px system-ui"; ctx.textAlign="right"; ctx.fillText((isBattery? (Math.floor(val*10)/10).toFixed(1) : Math.round(val)) + " / " + max, x0+w, y); ctx.textAlign="left";
+  // "+1" pop when solar adds a unit
+  if (isBattery && self.batteryPulseT < 1){
+    ctx.globalAlpha = Math.max(0, 1 - self.batteryPulseT);
+    ctx.fillStyle="#7dfbe0"; ctx.font="700 14px system-ui";
+    ctx.fillText("+1 ⚡", x0 + w*r - 4, y + 2 - self.batteryPulseT*18);
+    ctx.globalAlpha = 1;
+  }
+}
+function prompt(text, col){
+  ctx.font="700 15px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  const w=ctx.measureText(text).width+28, x=VW/2, y=VH-70;
+  ctx.fillStyle=col; ctx.globalAlpha=0.94; roundRect(ctx, x-w/2, y-16, w, 32, 10); ctx.fill(); ctx.globalAlpha=1;
+  ctx.fillStyle="#0d1117"; ctx.fillText(text, x, y+1);
+}
+</script>
+</body>
+</html>
