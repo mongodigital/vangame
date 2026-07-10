@@ -214,9 +214,12 @@
         <label class="field"><span>Vehicle</span>
           <div class="toggle" id="lengthToggle">
             <button data-v="short" class="on">Short</button><button data-v="long">Long</button><button data-v="bus">Bus</button><button data-v="moto">Moto</button><button data-v="ebike">E-Bike</button><button data-v="bicycle">Bike</button><button data-v="walker">Walker</button></div></label>
-        <label class="field"><span>Rear tires</span>
+        <label class="field" id="tiresField"><span>Rear tires</span>
           <div class="toggle" id="tiresToggle">
             <button data-v="4x4" class="on">4×4</button><button data-v="dualy">Dualy</button></div></label>
+        <label class="field" id="backpackField" style="display:none"><span>Backpack (+1 slot)</span>
+          <div class="toggle" id="backpackToggle">
+            <button data-v="no" class="on">No</button><button data-v="yes">Yes</button></div></label>
         <label class="field" id="extraField"><span id="extraLabel">Pack in the back</span>
           <div class="toggle" id="extraToggle">
             <button data-v="spare" class="on">Spare tire</button><button data-v="fuel">Extra fuel</button></div></label>
@@ -485,6 +488,22 @@ const bananas = [];
 })();
 const takenBananas = new Set(), requestedBananas = new Set();
 
+// --- loose world items for the inventory system (test props: tire, rope, hammer) ---
+const items = [];
+(() => {
+  const kinds = ["tire","rope","hammer","tire","rope","hammer"];
+  let i=0, tries=0;
+  while (i < kinds.length && tries < 8000){ tries++;
+    const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
+    if (blockedStatic(x, y, 14)) continue;
+    items.push({ id:"it"+i, kind:kinds[i], x, y }); i++;
+  }
+})();
+const takenItems = new Set();                  // item ids currently held/stowed (out of the world)
+const itemName = k => ({tire:"Tire", rope:"Rope", hammer:"Hammer"})[k] || k;
+const itemGlyph = k => ({tire:"🛞", rope:"🪢", hammer:"🔨"})[k] || "❔";
+const itemById = id => items.find(it => it.id === id);
+
 const COIN_RESPAWN_MS = 30000;      // a picked-up coin/boost respawns 30s later in a new spot
 const coinRespawnQueue = [];        // host only: [{ id, at }]
 let deliverySinceBonus = 0;         // host only: pity counter for the 5× delivery bonus
@@ -589,6 +608,9 @@ function isBicycle(config){ return !!(config && config.length === "bicycle"); }
 function isWalker(config){ return !!(config && config.length === "walker"); }
 function isTwoWheeler(config){ const l = config && config.length; return l === "moto" || l === "ebike" || l === "bicycle"; }
 function maxFoodFor(config){ return isEbike(config) ? 5 : isBicycle(config) ? 7.5 : isWalker(config) ? 5 : 0; }   // e-bike/walker 5, bicycle 1.5×
+function canBackpack(config){ const l = config && config.length; return l === "moto" || l === "ebike" || l === "bicycle" || l === "walker"; }
+function baseSlotsFor(config){ const l = config && config.length; return l === "long" ? 6 : l === "bus" ? 8 : l === "moto" ? 2 : l === "ebike" ? 2 : l === "bicycle" ? 1 : l === "walker" ? 1 : 4; }   // Short 4
+function vehSlotsFor(config){ return baseSlotsFor(config) + (canBackpack(config) && config.backpack ? 1 : 0); }   // backpack adds one
 function solarStrengthFor(config){ return isEbike(config) ? 0.1 : 1; }                      // e-bike solar is 1/10 as strong
 function wheel(ctx,cx,cy,len,wid){ roundRect(ctx, cx-len/2, cy-wid/2, len, wid, 3); ctx.fill(); }
 function drawWalker(ctx, config){
@@ -769,7 +791,7 @@ const roomInput = document.getElementById("roomInput");
 const startBtn = document.getElementById("startBtn");
 const lobbyErr = document.getElementById("lobbyErr");
 const shareHint = document.getElementById("shareHint");
-const config = { color: PALETTE[5], length:"short", rearTires:"4x4", extra:"spare", roof:["none"], propulsion:"fuel" };
+const config = { color: PALETTE[5], length:"short", rearTires:"4x4", extra:"spare", roof:["none"], propulsion:"fuel", backpack:false };
 
 const swatchWrap = document.getElementById("swatches");
 PALETTE.forEach(c => {
@@ -796,6 +818,12 @@ function applyVehicleUI(){
   const two = moto || ebike || bike || walker;
   document.getElementById("roofField").style.display = two ? "none" : "";
   document.getElementById("propField").style.display = two ? "none" : "";
+  // two-wheelers & walker carry a backpack instead of picking tires
+  const bp = canBackpack(config);
+  document.getElementById("tiresField").style.display = bp ? "none" : "";
+  document.getElementById("backpackField").style.display = bp ? "" : "none";
+  if (!bp) config.backpack = false;
+  document.getElementById("backpackToggle").querySelectorAll("button").forEach(b => b.classList.toggle("on", (b.dataset.v==="yes") === !!config.backpack));
   if (moto) config.propulsion = "fuel"; else if (ebike) config.propulsion = "electric"; else if (bike || walker) config.propulsion = "fuel";
   const exField = document.getElementById("extraField");
   const exLabel = document.getElementById("extraLabel");
@@ -811,6 +839,9 @@ function applyVehicleUI(){
   }
 }
 wireToggle("lengthToggle","length"); wireToggle("tiresToggle","rearTires"); wireToggle("extraToggle","extra"); wireToggle("propToggle","propulsion");
+document.getElementById("backpackToggle").querySelectorAll("button").forEach(btn => {
+  btn.onclick = () => { const g=btn.parentElement; g.querySelectorAll("button").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); config.backpack = (btn.dataset.v==="yes"); drawPreview(); };
+});
 applyVehicleUI();
 
 /* roof-accessory garage: one selector per slot; slot count follows the vehicle */
@@ -975,8 +1006,9 @@ const isFwdDown = () => keys.has("arrowup") || keys.has("w");
 addEventListener("keydown", e => {
   if (isTyping()) return;
   const k = e.key.toLowerCase();
-  if (playing && (DRIVE_KEYS.has(k) || k==="f" || k==="t")) e.preventDefault();
+  if (playing && (DRIVE_KEYS.has(k) || k==="f" || k==="t" || k==="i" || k==="p" || k==="y")) e.preventDefault();
   if (k === "h" && playing && !keys.has("h")) honk();
+  if (k === "p" && playing && !keys.has("p")) tryPickupDrop();   // pick up / stow / drop
   // boost: tap the accelerator, then press-and-hold again within 300ms
   if (playing && FWD_KEYS.has(k) && !isFwdDown()){
     const now = performance.now();
@@ -1136,6 +1168,7 @@ chatInput.addEventListener("keydown", e => {
   if (low==="/roomcode" || low==="/room"){ doRoomCode(); return; }
   if (low==="/gift"){ startGift(); return; }
   if (low==="/swap"){ startSwap(); return; }
+  if (low==="/controls" || low==="/keys"){ showControls(); return; }
   if (low==="/info" || low==="/help" || low==="/commands"){ showCommandInfo(); return; }
   if (t[0]==="/"){ addSysLine("Unknown command. Type <b>/info</b> to see what's available."); return; }
   addChatLine(self.name, self.config.color, t); net.sendChat(t);   // normal chat
@@ -1185,7 +1218,17 @@ function showCommandInfo(){
   addSysLine("&nbsp;&nbsp;<b>/gift</b> — give gold, fuel, or electric to another player");
   addSysLine("&nbsp;&nbsp;<b>/swap</b> — trade a roof or pack item with another player (they must accept)");
   addSysLine("&nbsp;&nbsp;<b>/roomcode</b> — show this room's code + join link");
+  addSysLine("&nbsp;&nbsp;<b>/controls</b> — show the game controls");
   addSysLine("&nbsp;&nbsp;<b>/info</b> — show this list &nbsp;·&nbsp; <b>/cancel</b> — stop a command in progress");
+}
+function showControls(){
+  addSysLine("🎮 <b>Controls</b>");
+  addSysLine("&nbsp;&nbsp;<b>Drive:</b> arrows / WASD (or a controller), or tap where to go");
+  addSysLine("&nbsp;&nbsp;<b>Boost / sprint:</b> double-tap + hold accelerator (or LB/RB)");
+  addSysLine("&nbsp;&nbsp;<b>H</b> horn &nbsp;·&nbsp; <b>F</b> fuel/charge (hold) &nbsp;·&nbsp; <b>T</b> hitch/drop trailer (hold)");
+  addSysLine("&nbsp;&nbsp;<b>Y</b> (hold) get in / out of your vehicle — on foot you become a walker");
+  addSysLine("&nbsp;&nbsp;<b>P</b> pick up / stow / drop an item &nbsp;·&nbsp; <b>I</b> (hold) open inventory");
+  addSysLine("&nbsp;&nbsp;Stand by your parked vehicle and hold <b>I</b> to use its storage");
 }
 
 /* ----- /gift ----- */
@@ -1386,6 +1429,8 @@ function worldSnapshot(){
            takenElecs: Array.from(takenElec),
            bananas: bananas.map(b => ({ id:b.id, x:b.x, y:b.y })),
            takenBananas: Array.from(takenBananas),
+           items: items.map(it => ({ id:it.id, x:it.x, y:it.y })),
+           takenItems: Array.from(takenItems),
            trailers: trailers.map(t => ({ id:t.id, towedBy:t.towedBy, x:t.x, y:t.y, angle:t.angle })) };
 }
 
@@ -1403,6 +1448,10 @@ startBtn.onclick = () => {
     angle: 0, speed: 0, fuel: maxFuelFor(config), maxFuel: maxFuelFor(config),
     propulsion: config.propulsion, battery: maxBatteryFor(config), maxBattery: maxBatteryFor(config),
     food: maxFoodFor(config), maxFood: maxFoodFor(config), stamina: 10, sprintCd: 0,
+    // inventory + on-foot
+    vehInv: Array(baseSlotsFor(config)).fill(null), backpackItem: null, held: null,
+    onFoot: false, footFood: 5, footMaxFood: 5, parkX: 0, parkY: 0, parkAngle: 0,
+    invOpen: false, yHold: 0, yConsumed: false,
     solarPanels: solarPanelsFor(config), solarAccum: 0, solarCharging: false, batteryPulseT: 99,
     coins: 100, refueling:false, atStation:false, fuelSession:false, fuelMsg:"",
     atCharger:false, chargeSession:false, charging:false, chargeMsg:"", evMode:false,
@@ -1482,6 +1531,8 @@ function hostHandle(conn, m){
   } else if (m.type === "grabBoost"){ hostGrabBoost(m.id, conn.peer);
   } else if (m.type === "grabElec"){ hostGrabElec(m.id, conn.peer);
   } else if (m.type === "grabBanana"){ hostGrabBanana(m.id, conn.peer);
+  } else if (m.type === "grabItem"){ hostGrabItem(m.id, conn.peer);
+  } else if (m.type === "dropItem"){ hostDropItem(m.id, m.x, m.y);
   } else if (m.type === "hitch"){ hostHitchTrailer(m.tid, conn.peer);
   } else if (m.type === "drop"){ hostDropTrailer(m.tid, conn.peer, m.x, m.y, m.angle);
   } else if (m.type === "chat"){
@@ -1520,6 +1571,14 @@ function hostGrabBanana(id, by){
   const msg = { type:"bananaTaken", id, by }; applyBananaTaken(msg); hostBroadcast(msg);
   coinRespawnQueue.push({ kind:"banana", id, at: performance.now() + BANANA_RESPAWN_MS });   // respawn after 60s
 }
+function hostGrabItem(id, by){
+  if (takenItems.has(id) || !itemById(id)) return;
+  const msg = { type:"itemTaken", id, by }; applyItemTaken(msg); hostBroadcast(msg);
+}
+function hostDropItem(id, x, y){
+  const it = itemById(id); if (!it) return;
+  const msg = { type:"itemDropped", id, x, y }; applyItemDropped(msg); hostBroadcast(msg);
+}
 function hostHitchTrailer(tid, by){
   const tr = trailers.find(t=>t.id===tid);
   if (!tr || tr.towedBy) return;
@@ -1557,6 +1616,8 @@ net.grabCoin = (id) => { if (net.isHost) hostGrabCoin(id, self.id); else if (net
 net.grabBoost = (id) => { if (net.isHost) hostGrabBoost(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabBoost", id }); };
 net.grabElec = (id) => { if (net.isHost) hostGrabElec(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabElec", id }); };
 net.grabBanana = (id) => { if (net.isHost) hostGrabBanana(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabBanana", id }); };
+net.grabItem = (id) => { if (net.isHost) hostGrabItem(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabItem", id }); };
+net.dropItem = (id, x, y) => { if (net.isHost) hostDropItem(id, x, y); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"dropItem", id, x, y }); };
 net.hitch = (tid) => { if (net.isHost) hostHitchTrailer(tid, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"hitch", tid }); };
 net.drop = (tid, x, y, angle) => { if (net.isHost) hostDropTrailer(tid, self.id, x, y, angle); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"drop", tid, x, y, angle }); };
 net.sendChat = (text) => { const msg={ type:"chat", id:self.id, name:self.name, color:self.config.color, text }; if (net.isHost) hostBroadcast(msg); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"chat", text }); };
@@ -1576,8 +1637,10 @@ function applyBoostTaken(m){ takenBoosts.add(m.id); if (m.by === self.id){ self.
 function applyBoostRespawn(m){ const b = fuelBoosts.find(b=>b.id===m.id); if (!b) return; b.x=m.x; b.y=m.y; takenBoosts.delete(m.id); requestedBoosts.delete(m.id); }
 function applyElecTaken(m){ takenElec.add(m.id); if (m.by === self.id){ self.battery = Math.min(self.maxBattery, self.battery + ELEC_FILL_AMOUNT); const e = elecFills.find(e=>e.id===m.id); if (e) floaters.push({ x:e.x, y:e.y, t:0, text:"+"+ELEC_FILL_AMOUNT+" ⚡", col:"#7dfbe0", big:true }); } }
 function applyElecRespawn(m){ const e = elecFills.find(e=>e.id===m.id); if (!e) return; e.x=m.x; e.y=m.y; takenElec.delete(m.id); requestedElec.delete(m.id); }
-function applyBananaTaken(m){ takenBananas.add(m.id); if (m.by === self.id){ self.food = Math.min(self.maxFood, self.food + BANANA_AMOUNT); const b = bananas.find(b=>b.id===m.id); if (b) floaters.push({ x:b.x, y:b.y, t:0, text:"+"+BANANA_AMOUNT+" 🍌", col:"#ffe14d", big:true }); } }
+function applyBananaTaken(m){ takenBananas.add(m.id); if (m.by === self.id){ const which = self.onFoot ? "footFood" : "food"; self[which] = Math.min(self.onFoot ? self.footMaxFood : self.maxFood, self[which] + BANANA_AMOUNT); const b = bananas.find(b=>b.id===m.id); if (b) floaters.push({ x:b.x, y:b.y, t:0, text:"+"+BANANA_AMOUNT+" 🍌", col:"#ffe14d", big:true }); } }
 function applyBananaRespawn(m){ const b = bananas.find(b=>b.id===m.id); if (!b) return; b.x=m.x; b.y=m.y; takenBananas.delete(m.id); requestedBananas.delete(m.id); }
+function applyItemTaken(m){ takenItems.add(m.id); }
+function applyItemDropped(m){ const it = itemById(m.id); if (!it) return; it.x=m.x; it.y=m.y; takenItems.delete(m.id); }
 function processCoinRespawns(){
   if (!net.isHost || !coinRespawnQueue.length) return;
   const now = performance.now();
@@ -1615,6 +1678,8 @@ function applyIncoming(m){
       (m.world.takenElecs||[]).forEach(id => takenElec.add(id));
       if (m.world.bananas) for (const wb of m.world.bananas){ const b=bananas.find(b=>b.id===wb.id); if (b){ b.x=wb.x; b.y=wb.y; } }
       (m.world.takenBananas||[]).forEach(id => takenBananas.add(id));
+      if (m.world.items) for (const wi of m.world.items){ const it=itemById(wi.id); if (it){ it.x=wi.x; it.y=wi.y; } }
+      (m.world.takenItems||[]).forEach(id => takenItems.add(id));
       (m.world.trailers||[]).forEach(applyTrailer);
     }
     return;
@@ -1622,7 +1687,8 @@ function applyIncoming(m){
   if (m.type === "full"){ showFull(); return; }
   if (m.type === "player"){ if (m.player.id !== self.id) upsertRemote(m.player); return; }
   if (m.type === "state"){ const r = remotes.get(m.id); if (!r) return;
-    r.x=m.x; r.y=m.y; r.angle=m.angle; r.speed=m.speed; r.fuel=m.fuel; if (typeof m.battery==="number") r.battery=m.battery; if (typeof m.coins==="number") r.coins=m.coins; return; }
+    r.x=m.x; r.y=m.y; r.angle=m.angle; r.speed=m.speed; r.fuel=m.fuel; if (typeof m.battery==="number") r.battery=m.battery; if (typeof m.coins==="number") r.coins=m.coins;
+    r.onFoot=!!m.onFoot; if (typeof m.parkX==="number"){ r.parkX=m.parkX; r.parkY=m.parkY; r.parkAngle=m.parkAngle; } r.held = m.held || null; return; }
   if (m.type === "honk"){ const r = remotes.get(m.id); if (r){ rings.push({x:r.x,y:r.y,t:0}); playMariachi(); } return; }
   if (m.type === "taken"){ applyTaken(m); return; }
   if (m.type === "coinRespawn"){ applyCoinRespawn(m); return; }
@@ -1632,6 +1698,8 @@ function applyIncoming(m){
   if (m.type === "elecRespawn"){ applyElecRespawn(m); return; }
   if (m.type === "bananaTaken"){ applyBananaTaken(m); return; }
   if (m.type === "bananaRespawn"){ applyBananaRespawn(m); return; }
+  if (m.type === "itemTaken"){ applyItemTaken(m); return; }
+  if (m.type === "itemDropped"){ applyItemDropped(m); return; }
   if (m.type === "trailer"){ applyTrailer(m); return; }
   if (m.type === "delivered"){ applyDelivered(m); return; }
   if (m.type === "chat"){ if (m.id !== self.id) addChatLine(m.name, m.color, m.text); return; }
@@ -1647,6 +1715,7 @@ function upsertRemote(p){
   r.id=p.id; r.name=p.name; r.config=p.config||{}; r.x=p.x; r.y=p.y; r.angle=p.angle;
   r.speed=p.speed||0; r.fuel=p.fuel ?? 100; r.coins=p.coins ?? 0; r.maxFuel=maxFuelFor(r.config);
   r.propulsion=(r.config&&r.config.propulsion)||"fuel"; r.battery=p.battery ?? 0; r.maxBattery=maxBatteryFor(r.config);
+  r.onFoot=!!p.onFoot; r.parkX=p.parkX ?? p.x; r.parkY=p.parkY ?? p.y; r.parkAngle=p.parkAngle ?? p.angle; r.held=p.held || null;
   refreshPlayerList();
 }
 function showFull(){ document.getElementById("fullMsg").style.display="flex"; try { if (net.peer) net.peer.destroy(); } catch {} }
@@ -1714,7 +1783,7 @@ function loop(now){
   const f = dt*60;
   update(dt, f); processCoinRespawns(); render();
   sendAcc += dt;
-  if (sendAcc >= 0.06){ sendAcc = 0; net.sendState({ x:self.x, y:self.y, angle:self.angle, speed:self.speed, fuel:self.fuel, battery:self.battery, coins:self.coins }); }
+  if (sendAcc >= 0.06){ sendAcc = 0; net.sendState({ x:self.x, y:self.y, angle:self.angle, speed:self.speed, fuel:self.fuel, battery:self.battery, coins:self.coins, onFoot:self.onFoot, parkX:self.parkX, parkY:self.parkY, parkAngle:self.parkAngle, held:self.held }); }
   requestAnimationFrame(loop);
 }
 
@@ -1756,9 +1825,60 @@ function autoReverse(s){
   return { throttle:-1, steer: clamp(err*2.0, -1, 1) };
 }
 
+/* ---------- inventory + on-foot (dismount) ---------- */
+const ITEM_R = 44;    // reach to pick up a loose item
+const PARK_R = 74;    // how close to your parked vehicle to re-enter / use its storage
+function nearestItem(x,y,r){ let best=null, bd=r*r; for (const it of items){ if (takenItems.has(it.id)) continue; const dx=it.x-x, dy=it.y-y, d=dx*dx+dy*dy; if (d<bd){ bd=d; best=it; } } return best; }
+function vehStorageAccessible(s){
+  if (isWalker(s.config)) return true;                                    // a walker carries its own satchel
+  if (!s.onFoot) return true;                                             // driving your own storage
+  const dx=s.x-s.parkX, dy=s.y-s.parkY; return dx*dx+dy*dy < PARK_R*PARK_R;  // on foot: stand by the parked vehicle
+}
+function firstFree(a){ for (let i=0;i<a.length;i++) if (!a[i]) return i; return -1; }
+function firstFilled(a){ for (let i=0;i<a.length;i++) if (a[i]) return i; return -1; }
+function stowHeld(s){
+  if (!s.held) return false;
+  if (vehStorageAccessible(s)){ const i=firstFree(s.vehInv); if (i>=0){ s.vehInv[i]=s.held; s.held=null; return true; } }
+  if (s.config.backpack && !s.backpackItem){ s.backpackItem=s.held; s.held=null; return true; }
+  return false;
+}
+function takeFromStorage(s){
+  if (s.held) return false;
+  if (vehStorageAccessible(s)){ const i=firstFilled(s.vehInv); if (i>=0){ s.held=s.vehInv[i]; s.vehInv[i]=null; return true; } }
+  if (s.config.backpack && s.backpackItem){ s.held=s.backpackItem; s.backpackItem=null; return true; }
+  return false;
+}
+function tryPickupDrop(){
+  const s=self; if (!s || !playing) return;
+  if (s.invOpen && !s.held){ if (takeFromStorage(s)) return; }             // panel open → pull an item into hand
+  if (s.held){
+    if (stowHeld(s)) return;                                              // stow into vehicle/backpack if room
+    const id=s.held; s.held=null; const it=itemById(id); if (it){ it.x=s.x; it.y=s.y; } takenItems.delete(id);   // else drop
+    net.dropItem(id, s.x, s.y);
+  } else {
+    const it = nearestItem(s.x, s.y, ITEM_R);
+    if (it){ takenItems.add(it.id); s.held=it.id; net.grabItem(it.id); stowHeld(s); }   // pick up, auto-stow if room
+  }
+}
+function dismountOrMount(){
+  const s=self; if (!s || !playing || isWalker(s.config)) return;          // a walker is already on foot
+  if (!s.onFoot){
+    const myTr = trailers.find(t=>t.towedBy===s.id); if (myTr) net.drop(myTr.id, myTr.tx, myTr.ty, myTr.tangle);   // let go of any trailer
+    s.parkX=s.x; s.parkY=s.y; s.parkAngle=s.angle; s.onFoot=true; s.speed=0; s.boost=false; s.accelTapArmed=false;
+    s.x += Math.sin(s.angle)*22; s.y -= Math.cos(s.angle)*22;              // step out beside the vehicle
+  } else {
+    const dx=s.x-s.parkX, dy=s.y-s.parkY;
+    if (dx*dx+dy*dy < PARK_R*PARK_R){ s.onFoot=false; s.x=s.parkX; s.y=s.parkY; s.angle=s.parkAngle; s.speed=0; }
+  }
+}
+
 function update(dt, f){
   const s = self;
   pollGamepad();   // read Bluetooth/USB controller into s.padThrottle/padSteer/padBoost/padFuel/padHitch each frame
+  // inventory panel (hold I) + enter/leave vehicle (hold Y)
+  s.invOpen = keys.has("i");
+  if (keys.has("y")) s.yHold += dt; else { s.yHold = 0; s.yConsumed = false; }
+  if (!s.yConsumed && s.yHold >= 0.4){ s.yConsumed = true; dismountOrMount(); }
   const kT = (keys.has("arrowup")||keys.has("w")?1:0) - (keys.has("arrowdown")||keys.has("s")?1:0);
   const kS = (keys.has("arrowright")||keys.has("d")?1:0) - (keys.has("arrowleft")||keys.has("a")?1:0);
   let throttle = clamp(kT + (s.padThrottle||0), -1, 1);      // keyboard + gamepad blended
@@ -1767,11 +1887,14 @@ function update(dt, f){
   else if (s.reverseTarget){ const a=autoReverse(s); throttle=a.throttle; steer=a.steer; }
   else if (s.waypoints.length){ const a=autoForward(s, dt); throttle=a.throttle; steer=a.steer; }
   const prop = s.propulsion;
-  const moto = isMoto(s.config), ebike = isEbike(s.config), bicycle = isBicycle(s.config), walker = isWalker(s.config);
+  const onFoot = s.onFoot;
+  const kindL = onFoot ? "walker" : s.config.length;      // on foot, you move as a walker
+  const foodField = onFoot ? "footFood" : "food";          // on foot uses a personal food meter
+  const moto = kindL==="moto", ebike = kindL==="ebike", bicycle = kindL==="bicycle", walker = kindL==="walker";
   const hasEnergy = moto     ? (s.fuel > 0)
                   : ebike    ? (s.battery >= 0.1)                          // e-bike is motor-driven; needs charge
                   : bicycle  ? (s.food > 0)                               // pedal power
-                  : walker   ? (s.food > 0)                               // on foot
+                  : walker   ? (s[foodField] > 0)                         // on foot / walker
                   : prop === "electric" ? (s.battery >= 0.1)
                   : prop === "hybrid"   ? (s.fuel > 0 || s.battery >= 0.1)  // hybrid runs on gas OR battery (need ≥0.1)
                   : (s.fuel > 0);
@@ -1835,7 +1958,7 @@ function update(dt, f){
     } else if (bicycle){
       s.food = Math.max(0, s.food - baseBurn*0.05);                   // pedal power: food is the only energy
     } else if (walker){
-      s.food = Math.max(0, s.food - baseBurn * (boosting ? 0.0375 : 0.025));   // ½ bicycle walking, ¾ bicycle sprinting (no eco)
+      s[foodField] = Math.max(0, s[foodField] - baseBurn * (boosting ? 0.0375 : 0.025));   // ½ bicycle walking, ¾ bicycle sprinting (no eco)
     } else {
     let mult = fuelFactor(s.config);
     const boostConsum = prop === "electric" ? 1.25*1.15 : prop === "hybrid" ? 1.25*1.10 : 1.25;   // boost efficiency
@@ -1874,7 +1997,7 @@ function update(dt, f){
   for (const st of stations){ const dx=s.x-st.x, dy=s.y-st.y; if (dx*dx+dy*dy < STATION_R*STATION_R){ atStation=true; break; } }
   s.atStation = atStation; s.fuelMsg = "";
   const fuelBtn = keys.has("f") || s.fuelHold || s.padFuel;
-  const wantFuel = atStation && fuelBtn && s.fuel < s.maxFuel;
+  const wantFuel = atStation && fuelBtn && s.fuel < s.maxFuel && !s.onFoot;
   if (wantFuel && !s.fuelSession){
     if (s.coins >= 25){ s.coins -= 25; s.fuelSession = true; floaters.push({ x:s.x, y:s.y-30, t:0, text:"-25", col:"#ff9a76" }); }
     else s.fuelMsg = "Need 25 coins";
@@ -1889,7 +2012,7 @@ function update(dt, f){
   let atCharger = false;
   for (const ch of chargers){ const dx=s.x-ch.x, dy=s.y-ch.y; if (dx*dx+dy*dy < CHARGER_R*CHARGER_R){ atCharger=true; break; } }
   s.atCharger = atCharger; s.chargeMsg = "";
-  const wantCharge = atCharger && fuelBtn && s.maxBattery > 0 && s.battery < s.maxBattery;
+  const wantCharge = atCharger && fuelBtn && s.maxBattery > 0 && s.battery < s.maxBattery && !s.onFoot;
   if (wantCharge && !s.chargeSession){
     if (s.coins >= 25){ s.coins -= 25; s.chargeSession = true; floaters.push({ x:s.x, y:s.y-30, t:0, text:"-25", col:"#ff9a76" }); }
     else s.chargeMsg = "Need 25 coins";
@@ -1908,15 +2031,16 @@ function update(dt, f){
     const dx=s.x-b.x, dy=s.y-b.y; if (dx*dx+dy*dy < COIN_R*COIN_R){ requestedBoosts.add(b.id); net.grabBoost(b.id); }
   }
   for (const e of elecFills){ if (takenElec.has(e.id) || requestedElec.has(e.id)) continue;
-    const dx=s.x-e.x, dy=s.y-e.y; if (s.maxBattery > 0 && dx*dx+dy*dy < COIN_R*COIN_R){ requestedElec.add(e.id); net.grabElec(e.id); }   // battery vehicles only
+    const dx=s.x-e.x, dy=s.y-e.y; if (s.maxBattery > 0 && !s.onFoot && dx*dx+dy*dy < COIN_R*COIN_R){ requestedElec.add(e.id); net.grabElec(e.id); }   // battery vehicles only
   }
+  const canEatBanana = s.onFoot ? (s.footFood < s.footMaxFood) : (s.maxFood > 0 && s.food < s.maxFood);
   for (const b of bananas){ if (takenBananas.has(b.id) || requestedBananas.has(b.id)) continue;
-    const dx=s.x-b.x, dy=s.y-b.y; if (s.maxFood > 0 && s.food < s.maxFood && dx*dx+dy*dy < COIN_R*COIN_R){ requestedBananas.add(b.id); net.grabBanana(b.id); }   // food vehicles only
+    const dx=s.x-b.x, dy=s.y-b.y; if (canEatBanana && dx*dx+dy*dy < COIN_R*COIN_R){ requestedBananas.add(b.id); net.grabBanana(b.id); }   // food vehicles & on-foot walkers
   }
 
   // ---- trailer hitch / drop (hold T ~0.35s) ----
   const myTrailer = trailers.find(t=>t.towedBy===self.id);
-  if (keys.has("t") || s.padHitch) s.tHold += dt; else { s.tHold = 0; s.tConsumed = false; }
+  if (!s.onFoot && (keys.has("t") || s.padHitch)) s.tHold += dt; else { s.tHold = 0; s.tConsumed = false; }
   if (!s.tConsumed && s.tHold >= 0.35){
     s.tConsumed = true;
     if (myTrailer){ net.drop(myTrailer.id, myTrailer.tx, myTrailer.ty, myTrailer.tangle); }
@@ -1930,7 +2054,7 @@ function update(dt, f){
   const warnEl = document.getElementById("warn");
   const dead = moto     ? (s.fuel <= 0)
              : ebike    ? (s.battery < 0.1)
-             : (bicycle || walker) ? (s.food <= 0)
+             : (bicycle || walker) ? (s[foodField] <= 0)
              : s.propulsion === "electric" ? (s.battery < 0.1)
              : s.propulsion === "hybrid"   ? (s.fuel <= 0 && s.battery < 0.1)
              : (s.fuel <= 0);
@@ -2094,12 +2218,27 @@ function render(){
     ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(b.x, b.y+10, 8, 3, 0, 0, 7); ctx.fill();
     ctx.font = "800 20px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("🍌", b.x, b.y+bob+1);
   }
+  // loose inventory items (tire / rope / hammer)
+  for (const it of items){ if (takenItems.has(it.id) || !vis(it.x,it.y,20)) continue;
+    const bob = Math.sin(clock*3 + it.x*0.05)*1.5;
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(it.x, it.y+10, 8, 3, 0, 0, 7); ctx.fill();
+    ctx.font = "800 20px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(itemGlyph(it.kind), it.x, it.y+bob+1);
+  }
 
   // trailers (draw before vans)
   for (const tr of trailers){ if (!vis(tr.tx,tr.ty,60)) continue; drawTrailer(tr); }
 
-  // vans (remotes then self)
-  for (const r of remotes.values()) drawWorldVan(r.rx, r.ry, r.rangle, r.config||{}, r.name, r.fuel, maxFuelFor(r.config||{}), r.battery, maxBatteryFor(r.config||{}), false);
+  // vans (remotes then self) — on-foot players show a parked vehicle + a walker
+  for (const r of remotes.values()){
+    const cfg = r.config||{};
+    if (r.onFoot){
+      ctx.save(); ctx.translate(r.parkX ?? r.rx, r.parkY ?? r.ry); ctx.rotate(r.parkAngle ?? 0); drawVan(ctx, cfg); ctx.restore();
+      drawWorldVan(r.rx, r.ry, r.rangle, {...cfg, length:"walker"}, r.name, 0, 0, 0, 0, false);
+    } else {
+      drawWorldVan(r.rx, r.ry, r.rangle, cfg, r.name, r.fuel, maxFuelFor(cfg), r.battery, maxBatteryFor(cfg), false);
+    }
+    drawHeld(r.rx, r.ry, r.rangle, r.held);
+  }
   if (self.boosting){                                  // speed streaks behind the van
     ctx.strokeStyle = "rgba(255,150,80,0.5)"; ctx.lineWidth = 3; ctx.lineCap = "round";
     const bx = self.x - Math.cos(self.angle)*24, by = self.y - Math.sin(self.angle)*24;
@@ -2107,7 +2246,14 @@ function render(){
       ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px - Math.cos(self.angle)*12, py - Math.sin(self.angle)*12); ctx.stroke(); }
     ctx.lineCap = "butt";
   }
-  drawWorldVan(self.x, self.y, self.angle, self.config, self.name, self.fuel, self.maxFuel, self.battery, self.maxBattery, true);
+  if (self.onFoot){
+    ctx.save(); ctx.translate(self.parkX, self.parkY); ctx.rotate(self.parkAngle); drawVan(ctx, self.config); ctx.restore();   // parked vehicle
+    if (vehStorageAccessible(self)){ ctx.strokeStyle="rgba(120,220,255,0.6)"; ctx.lineWidth=2; ctx.setLineDash([6,6]); ctx.beginPath(); ctx.arc(self.parkX, self.parkY, PARK_R, 0, 7); ctx.stroke(); ctx.setLineDash([]); }  // "in range" ring
+    drawWorldVan(self.x, self.y, self.angle, {...self.config, length:"walker"}, self.name, 0, 0, 0, 0, true);
+  } else {
+    drawWorldVan(self.x, self.y, self.angle, self.config, self.name, self.fuel, self.maxFuel, self.battery, self.maxBattery, true);
+  }
+  drawHeld(self.x, self.y, self.angle, self.held);
 
   // route markers (tap-to-drive)
   if (self.waypoints.length){
@@ -2141,11 +2287,16 @@ function render(){
   }
 
   drawMinimap();
+  const nearPark = self.onFoot && ((self.x-self.parkX)**2 + (self.y-self.parkY)**2 < PARK_R*PARK_R);
   if (self.refueling) prompt("⛽ Refueling…", "#52c46a");
   else if (self.charging) prompt("⚡ Charging…", "#4fd1c5");
-  else if (self.atStation && self.fuel<self.maxFuel) prompt(self.fuelMsg ? "⛽ "+self.fuelMsg : "⛽ Hold F to fuel — 25 coins", self.fuelMsg ? "#ff8b5b" : "#ffb03a");
-  else if (self.atCharger && self.maxBattery>0 && self.battery<self.maxBattery) prompt(self.chargeMsg ? "⚡ "+self.chargeMsg : "⚡ Hold F to charge — 25 coins", self.chargeMsg ? "#ff8b5b" : "#4fd1c5");
+  else if (!self.onFoot && self.atStation && self.fuel<self.maxFuel) prompt(self.fuelMsg ? "⛽ "+self.fuelMsg : "⛽ Hold F to fuel — 25 coins", self.fuelMsg ? "#ff8b5b" : "#ffb03a");
+  else if (!self.onFoot && self.atCharger && self.maxBattery>0 && self.battery<self.maxBattery) prompt(self.chargeMsg ? "⚡ "+self.chargeMsg : "⚡ Hold F to charge — 25 coins", self.chargeMsg ? "#ff8b5b" : "#4fd1c5");
+  else if (nearPark) prompt("Hold Y to enter your vehicle · P to use its storage", "#9ecbff");
+  else if (self.held) prompt("P to stow / drop" + (!self.onFoot && !isWalker(self.config) ? " · Hold Y to get out" : ""), "#ffd98a");
+  else if (nearestItem(self.x, self.y, ITEM_R)) prompt("P to pick up" + (!self.onFoot && !isWalker(self.config) ? " · Hold Y to get out" : ""), "#ffd98a");
   drawStats();
+  drawInventoryPanel();
   drawTimeOfDay();
   if (touchMode) updateTouchButtons();
 }
@@ -2243,7 +2394,7 @@ function drawMinimap(){
 function drawStats(){
   ctx.textAlign="left"; ctx.textBaseline="alphabetic";
   const x0 = 16, w = 210;
-  const hasFuelBar = self.maxFuel > 0, hasBatBar = self.maxBattery > 0, hasFoodBar = self.maxFood > 0;
+  const hasFuelBar = self.maxFuel > 0 && !self.onFoot, hasBatBar = self.maxBattery > 0 && !self.onFoot, hasFoodBar = self.onFoot || self.maxFood > 0;
   const nBars = (hasFuelBar?1:0) + (hasBatBar?1:0) + (hasFoodBar?1:0);
   const panelH = 74 + nBars*30;
   const y0 = VH - panelH;
@@ -2268,7 +2419,43 @@ function drawStats(){
   let by = y0 + 82;
   if (hasFuelBar){ drawEnergyBar(x0, by, w, "FUEL", self.fuel, self.maxFuel, false); by += 30; }
   if (hasBatBar){ drawEnergyBar(x0, by, w, "BATTERY", self.battery, self.maxBattery, true); by += 30; }
-  if (hasFoodBar){ drawFoodBar(x0, by, w, self.food, self.maxFood); by += 30; }
+  if (hasFoodBar){ drawFoodBar(x0, by, w, self.onFoot ? self.footFood : self.food, self.onFoot ? self.footMaxFood : self.maxFood); by += 30; }
+}
+function drawHeld(x, y, angle, heldId){
+  if (!heldId) return; const it = itemById(heldId); if (!it) return;
+  const hx = x + Math.cos(angle)*15, hy = y + Math.sin(angle)*15;
+  ctx.font = "800 15px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(itemGlyph(it.kind), hx, hy);
+}
+function drawInventoryPanel(){
+  const s = self; if (!s || !s.invOpen) return;
+  const rows = [];
+  if (vehStorageAccessible(s)) rows.push({ label: isWalker(s.config) ? "PACK" : "VEHICLE", slots: s.vehInv });
+  if (s.config.backpack) rows.push({ label: "BACKPACK", slots: [s.backpackItem] });
+  if (!rows.length){ return; }
+  const cell = 44, gap = 8, padX = 16, padTop = 30;
+  const maxCols = Math.max(...rows.map(r => r.slots.length));
+  const w = padX*2 + maxCols*cell + (maxCols-1)*gap;
+  const h = padTop + rows.length*(cell+22) + 6;
+  const x0 = VW/2 - w/2, y0 = 62;
+  ctx.fillStyle = "rgba(10,15,22,0.92)"; roundRect(ctx, x0, y0, w, h, 12); ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,0.14)"; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = "#dfe7ee"; ctx.font = "700 12px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  ctx.fillText("INVENTORY — press P to take / stow", x0 + w/2, y0 + 19);
+  let ry = y0 + padTop + 12;
+  for (const row of rows){
+    const used = row.slots.filter(Boolean).length;
+    ctx.fillStyle = "#9fb0c0"; ctx.font = "600 10px system-ui"; ctx.textAlign = "left";
+    ctx.fillText(row.label + "  " + used + "/" + row.slots.length, x0 + padX, ry - 4);
+    for (let i = 0; i < row.slots.length; i++){
+      const cx = x0 + padX + i*(cell+gap), cy = ry;
+      ctx.fillStyle = "rgba(255,255,255,0.06)"; roundRect(ctx, cx, cy, cell, cell, 8); ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.14)"; ctx.lineWidth = 1; ctx.stroke();
+      const id = row.slots[i];
+      if (id){ const it = itemById(id); ctx.fillStyle = "#eef2f6"; ctx.font = "800 22px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(itemGlyph(it ? it.kind : "?"), cx + cell/2, cy + cell/2 + 1); }
+    }
+    ry += cell + 22;
+  }
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
 }
 function drawFoodBar(x0, y, w, val, max){
   ctx.textAlign="left"; ctx.textBaseline="alphabetic";
