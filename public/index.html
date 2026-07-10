@@ -213,14 +213,14 @@
           <div class="swatches" id="swatches"></div></label>
         <label class="field"><span>Vehicle</span>
           <div class="toggle" id="lengthToggle">
-            <button data-v="short" class="on">Short</button><button data-v="long">Long</button><button data-v="bus">Bus</button><button data-v="moto">Moto</button></div></label>
+            <button data-v="short" class="on">Short</button><button data-v="long">Long</button><button data-v="bus">Bus</button><button data-v="moto">Moto</button><button data-v="ebike">E-Bike</button><button data-v="bicycle">Bike</button></div></label>
         <label class="field"><span>Rear tires</span>
           <div class="toggle" id="tiresToggle">
             <button data-v="4x4" class="on">4×4</button><button data-v="dualy">Dualy</button></div></label>
-        <label class="field"><span id="extraLabel">Pack in the back</span>
+        <label class="field" id="extraField"><span id="extraLabel">Pack in the back</span>
           <div class="toggle" id="extraToggle">
             <button data-v="spare" class="on">Spare tire</button><button data-v="fuel">Extra fuel</button></div></label>
-        <label class="field"><span>Propulsion</span>
+        <label class="field" id="propField"><span>Propulsion</span>
           <div class="toggle" id="propToggle">
             <button data-v="fuel" class="on">Fuel</button><button data-v="hybrid">Hybrid</button><button data-v="electric">Electric</button></div></label>
       </div>
@@ -472,6 +472,19 @@ const elecFills = [];
 })();
 const takenElec = new Set(), requestedElec = new Set();
 
+// --- bananas (+1 food each; 10 on the map; respawn 60s after pickup; food vehicles only) ---
+const BANANA_AMOUNT = 1, BANANA_COUNT = 10, BANANA_RESPAWN_MS = 60000;
+const bananas = [];
+(() => {
+  let placed=0, tries=0, id=0;
+  while (placed < BANANA_COUNT && tries < 8000){ tries++;
+    const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
+    if (blockedStatic(x, y, 14)) continue;
+    bananas.push({ id:"ban"+(id++), x, y }); placed++;
+  }
+})();
+const takenBananas = new Set(), requestedBananas = new Set();
+
 const COIN_RESPAWN_MS = 30000;      // a picked-up coin/boost respawns 30s later in a new spot
 const coinRespawnQueue = [];        // host only: [{ id, at }]
 let deliverySinceBonus = 0;         // host only: pity counter for the 5× delivery bonus
@@ -569,40 +582,50 @@ function findPath(sx,sy,tx,ty){
 /* =====================================================================
    VAN DRAWING (shared by lobby preview + world). Van points toward +x.
    ===================================================================== */
-function vanLength(config){ const l = config && config.length; return l === "bus" ? 104 : l === "long" ? 78 : l === "moto" ? 44 : 54; }
+function vanLength(config){ const l = config && config.length; return l === "bus" ? 104 : l === "long" ? 78 : l === "moto" ? 44 : l === "ebike" ? 42 : l === "bicycle" ? 40 : 54; }
 function isMoto(config){ return !!(config && config.length === "moto"); }
+function isEbike(config){ return !!(config && config.length === "ebike"); }
+function isBicycle(config){ return !!(config && config.length === "bicycle"); }
+function isTwoWheeler(config){ const l = config && config.length; return l === "moto" || l === "ebike" || l === "bicycle"; }
+function maxFoodFor(config){ return isEbike(config) ? 5 : isBicycle(config) ? 7.5 : 0; }   // e-bike 5, bicycle 1.5× that
+function solarStrengthFor(config){ return isEbike(config) ? 0.1 : 1; }                      // e-bike solar is 1/10 as strong
 function wheel(ctx,cx,cy,len,wid){ roundRect(ctx, cx-len/2, cy-wid/2, len, wid, 3); ctx.fill(); }
-function drawMoto(ctx, config){
+function drawTwoWheeler(ctx, config){
+  const kind = config.length;   // "moto" | "ebike" | "bicycle"
   const color=(config&&config.color)||"#e84b3c", dark=shade(color,-0.4), light=shade(color,0.18);
-  const L=44, W=13;
+  const L = kind==="moto"?44:kind==="ebike"?40:38, W = kind==="bicycle"?9:kind==="ebike"?11:13;
   ctx.fillStyle="rgba(0,0,0,0.20)"; roundRect(ctx,-L/2+2,-W/2+3,L,W,6); ctx.fill();
   // inline wheels
   ctx.fillStyle="#141414";
-  wheel(ctx, L/2-8, 0, 16, 7);    // front
-  wheel(ctx, -L/2+8, 0, 18, 8);   // rear
-  // rear fuel-can attachment (the one allowed rear slot item)
-  if (config && config.extra === "fuel"){
-    ctx.fillStyle="#c0392b"; roundRect(ctx,-L/2-2,-6,10,12,2); ctx.fill();
-    ctx.fillStyle="#7d2519"; ctx.fillRect(-L/2+1,-8,4,3);
-  }
+  wheel(ctx, L/2-8, 0, kind==="bicycle"?18:16, kind==="bicycle"?5:7);   // front
+  wheel(ctx, -L/2+8, 0, 18, kind==="bicycle"?6:8);                       // rear
+  // rear attachment
+  if (kind==="moto" && config.extra==="fuel"){ ctx.fillStyle="#c0392b"; roundRect(ctx,-L/2-2,-6,10,12,2); ctx.fill(); ctx.fillStyle="#7d2519"; ctx.fillRect(-L/2+1,-8,4,3); }
+  if (kind==="ebike" && config.extra==="solar"){ ctx.fillStyle="#1b2a55"; roundRect(ctx,-L/2-3,-7,12,14,2); ctx.fill(); ctx.strokeStyle="#4a6fc8"; ctx.lineWidth=1; ctx.strokeRect(-L/2-3,-7,12,14); ctx.beginPath(); ctx.moveTo(-L/2-3,0); ctx.lineTo(-L/2+9,0); ctx.stroke(); }
   // frame spine
-  ctx.strokeStyle=dark; ctx.lineWidth=5; ctx.lineCap="round";
+  ctx.strokeStyle=dark; ctx.lineWidth=kind==="bicycle"?3:5; ctx.lineCap="round";
   ctx.beginPath(); ctx.moveTo(-L/2+8,0); ctx.lineTo(L/2-8,0); ctx.stroke(); ctx.lineCap="butt";
-  // seat (dark) + fuel tank (body colour)
-  ctx.fillStyle=dark; roundRect(ctx,-L/2+12,-W/2+2,13,W-4,4); ctx.fill();
-  ctx.fillStyle=color; ctx.strokeStyle=dark; ctx.lineWidth=1.5; roundRect(ctx,-4,-W/2+1,18,W-2,5); ctx.fill(); ctx.stroke();
-  ctx.fillStyle=light; roundRect(ctx,0,-W/2+3,10,W-6,3); ctx.fill();
+  if (kind!=="bicycle"){
+    // seat (dark) + tank/battery (body colour)
+    ctx.fillStyle=dark; roundRect(ctx,-L/2+12,-W/2+2,13,W-4,4); ctx.fill();
+    ctx.fillStyle=color; ctx.strokeStyle=dark; ctx.lineWidth=1.5; roundRect(ctx,-4,-W/2+1,18,W-2,5); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=light; roundRect(ctx,0,-W/2+3,10,W-6,3); ctx.fill();
+    if (kind==="ebike"){ ctx.fillStyle="#2bb8a3"; roundRect(ctx,-L/2+6,-3,6,6,1); ctx.fill(); }   // hub motor hint
+  } else {
+    // bicycle: coloured top-tube + saddle
+    ctx.strokeStyle=color; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-L/2+12,0); ctx.lineTo(L/2-12,0); ctx.stroke();
+    ctx.fillStyle=dark; roundRect(ctx,-L/2+9,-3,6,6,2); ctx.fill();
+  }
   // handlebars near the front
   ctx.strokeStyle="#20262e"; ctx.lineWidth=3; ctx.lineCap="round";
   ctx.beginPath(); ctx.moveTo(L/2-14,-W/2-3); ctx.lineTo(L/2-14,W/2+3); ctx.stroke(); ctx.lineCap="butt";
   // rider (top-down: shoulders + helmet)
-  ctx.fillStyle="#2a2f36"; ctx.beginPath(); ctx.ellipse(-3,0,7,6,0,0,7); ctx.fill();
+  ctx.fillStyle="#2a2f36"; ctx.beginPath(); ctx.ellipse(-3,0,6,5,0,0,7); ctx.fill();
   ctx.fillStyle="#59606a"; ctx.beginPath(); ctx.arc(3,0,4,0,7); ctx.fill();
-  // headlight
-  ctx.fillStyle="#fff4bf"; ctx.beginPath(); ctx.arc(L/2-3,0,2.6,0,7); ctx.fill();
+  if (kind!=="bicycle"){ ctx.fillStyle="#fff4bf"; ctx.beginPath(); ctx.arc(L/2-3,0,2.6,0,7); ctx.fill(); }   // headlight
 }
 function drawVan(ctx, config){
-  if (isMoto(config)){ drawMoto(ctx, config); return; }
+  if (isTwoWheeler(config)){ drawTwoWheeler(ctx, config); return; }
   const L = vanLength(config), W = 30;
   const color = (config && config.color) || "#e84b3c";
   const dark  = shade(color,-0.4), light = shade(color,0.16);
@@ -646,6 +669,7 @@ function drawVan(ctx, config){
 }
 function maxFuelFor(config){
   if (isMoto(config)) return 25 + (config.extra === "fuel" ? 10 : 0);   // 25-unit tank + optional 10-unit rear can
+  if (isEbike(config) || isBicycle(config)) return 0;                   // bikes run on electric/food, not fuel
   const prop = (config && config.propulsion) || "fuel";
   if (prop === "electric") return 0;                        // electric has no fuel tank
   let m = prop === "hybrid" ? 50 : 100;                     // hybrid comes with a 50-unit tank
@@ -653,13 +677,13 @@ function maxFuelFor(config){
   if (config && config.roof) for (const a of config.roof) if (a === "fuelcan") m += 40;   // each roof fuel can adds +40
   return m;
 }
-function maxBatteryFor(config){ if (isMoto(config)) return 0; const p = (config && config.propulsion) || "fuel"; return (p === "hybrid" || p === "electric") ? 10 : 0; }
-function solarPanelsFor(config){ let n = 0; if (config && config.roof) for (const a of config.roof) if (a === "solar") n++; return n; }
+function maxBatteryFor(config){ if (isEbike(config)) return 10; if (isMoto(config) || isBicycle(config)) return 0; const p = (config && config.propulsion) || "fuel"; return (p === "hybrid" || p === "electric") ? 10 : 0; }
+function solarPanelsFor(config){ let n = 0; if (config && config.roof) for (const a of config.roof) if (a === "solar") n++; if (isEbike(config) && config.extra === "solar") n++; return n; }
 // consumption multiplier by vehicle: short 1x, long 1.1x, bus 1.25x
 function fuelFactor(config){ const l = config && config.length; return l === "bus" ? 1.25 : l === "long" ? 1.1 : 1; }
 
 /* ---- roof accessory slots: short van 1, long van 2, bus 3 ---- */
-function roofSlots(config){ const l = config && config.length; if (l === "moto") return 0; return l === "bus" ? 3 : l === "long" ? 2 : 1; }
+function roofSlots(config){ const l = config && config.length; if (l === "moto" || l === "ebike" || l === "bicycle") return 0; return l === "bus" ? 3 : l === "long" ? 2 : 1; }
 const ACCESSORIES = [
   { id:"none",     name:"Empty" },
   { id:"rack",     name:"Roof rack" },
@@ -745,21 +769,24 @@ function wireToggle(id, key){
     btn.onclick = () => { grp.querySelectorAll("button").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); config[key] = btn.dataset.v; if (key==="length"){ applyVehicleUI(); syncRoofSlots(); } drawPreview(); };
   });
 }
-// motorcycle has no roof, is fuel-only, and its one rear slot only takes a +10 fuel can
+// two-wheelers have no roof and a fixed energy type, so hide roof + propulsion and adapt the rear slot
 function applyVehicleUI(){
-  const moto = isMoto(config);
-  const roofField = document.getElementById("roofField");
-  if (roofField) roofField.style.display = moto ? "none" : "";
-  const propWrap = document.getElementById("propToggle");
-  if (moto){
-    config.propulsion = "fuel";
-    propWrap.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === "fuel"));
-    propWrap.classList.add("locked");
-  } else propWrap.classList.remove("locked");
+  const moto = isMoto(config), ebike = isEbike(config), bike = isBicycle(config), two = moto || ebike || bike;
+  document.getElementById("roofField").style.display = two ? "none" : "";
+  document.getElementById("propField").style.display = two ? "none" : "";
+  if (moto) config.propulsion = "fuel"; else if (ebike) config.propulsion = "electric"; else if (bike) config.propulsion = "fuel";
+  const exField = document.getElementById("extraField");
   const exLabel = document.getElementById("extraLabel");
   const exBtns = document.getElementById("extraToggle").querySelectorAll("button");
-  if (moto){ if (exLabel) exLabel.textContent = "Rear slot"; exBtns[0].textContent = "None"; exBtns[1].textContent = "Fuel can (+10)"; }
-  else { if (exLabel) exLabel.textContent = "Pack in the back"; exBtns[0].textContent = "Spare tire"; exBtns[1].textContent = "Extra fuel"; }
+  if (bike){                                   // bicycle: no attachments
+    exField.style.display = "none"; config.extra = "spare";
+  } else {
+    exField.style.display = "";
+    if (moto){ exLabel.textContent="Rear slot"; exBtns[0].textContent="None"; exBtns[1].textContent="Fuel can (+10)"; exBtns[1].dataset.v="fuel"; if (config.extra==="solar") config.extra="spare"; }
+    else if (ebike){ exLabel.textContent="Rear slot"; exBtns[0].textContent="None"; exBtns[1].textContent="Solar panel"; exBtns[1].dataset.v="solar"; if (config.extra==="fuel") config.extra="spare"; }
+    else { exLabel.textContent="Pack in the back"; exBtns[0].textContent="Spare tire"; exBtns[1].textContent="Extra fuel"; exBtns[1].dataset.v="fuel"; if (config.extra==="solar") config.extra="spare"; }
+    exBtns.forEach(b => b.classList.toggle("on", b.dataset.v === config.extra));
+  }
 }
 wireToggle("lengthToggle","length"); wireToggle("tiresToggle","rearTires"); wireToggle("extraToggle","extra"); wireToggle("propToggle","propulsion");
 applyVehicleUI();
@@ -792,7 +819,7 @@ function drawPreview(){
   pctx.setTransform(dpr,0,0,dpr,0,0);
   const w = pv.clientWidth, h = pv.clientHeight;
   pctx.clearRect(0,0,w,h);
-  const psc = vanLength(config) > 90 ? 1.55 : isMoto(config) ? 2.7 : 2.1;   // shrink the bus, enlarge the little moto
+  const psc = vanLength(config) > 90 ? 1.55 : isTwoWheeler(config) ? 2.7 : 2.1;   // shrink the bus, enlarge the little two-wheelers
   pctx.save(); pctx.translate(w/2, h/2); pctx.rotate(-Math.PI/2); pctx.scale(psc, psc);
   drawVan(pctx, config); pctx.restore();
 }
@@ -1121,6 +1148,7 @@ function recomputeVehicle(){
   if (!self) return;
   self.maxFuel = maxFuelFor(self.config); self.fuel = Math.min(self.fuel, self.maxFuel);
   self.maxBattery = maxBatteryFor(self.config); self.battery = Math.min(self.battery, self.maxBattery);
+  self.maxFood = maxFoodFor(self.config); self.food = Math.min(self.food ?? self.maxFood, self.maxFood);
   self.solarPanels = solarPanelsFor(self.config);
 }
 function setSlot(cfg, kind, ref, id){ if (kind==="roof"){ if (!Array.isArray(cfg.roof)) cfg.roof=[]; cfg.roof[ref]=id; } else { cfg.extra = id; } }
@@ -1334,6 +1362,8 @@ function worldSnapshot(){
            takenBoosts: Array.from(takenBoosts),
            elecs: elecFills.map(e => ({ id:e.id, x:e.x, y:e.y })),
            takenElecs: Array.from(takenElec),
+           bananas: bananas.map(b => ({ id:b.id, x:b.x, y:b.y })),
+           takenBananas: Array.from(takenBananas),
            trailers: trailers.map(t => ({ id:t.id, towedBy:t.towedBy, x:t.x, y:t.y, angle:t.angle })) };
 }
 
@@ -1350,6 +1380,7 @@ startBtn.onclick = () => {
     x: SPAWN.x + (Math.random()*60-30), y: SPAWN.y + (Math.random()*40-20),
     angle: 0, speed: 0, fuel: maxFuelFor(config), maxFuel: maxFuelFor(config),
     propulsion: config.propulsion, battery: maxBatteryFor(config), maxBattery: maxBatteryFor(config),
+    food: maxFoodFor(config), maxFood: maxFoodFor(config),
     solarPanels: solarPanelsFor(config), solarAccum: 0, solarCharging: false, batteryPulseT: 99,
     coins: 100, refueling:false, atStation:false, fuelSession:false, fuelMsg:"",
     atCharger:false, chargeSession:false, charging:false, chargeMsg:"", evMode:false,
@@ -1428,6 +1459,7 @@ function hostHandle(conn, m){
   } else if (m.type === "grab"){ hostGrabCoin(m.id, conn.peer);
   } else if (m.type === "grabBoost"){ hostGrabBoost(m.id, conn.peer);
   } else if (m.type === "grabElec"){ hostGrabElec(m.id, conn.peer);
+  } else if (m.type === "grabBanana"){ hostGrabBanana(m.id, conn.peer);
   } else if (m.type === "hitch"){ hostHitchTrailer(m.tid, conn.peer);
   } else if (m.type === "drop"){ hostDropTrailer(m.tid, conn.peer, m.x, m.y, m.angle);
   } else if (m.type === "chat"){
@@ -1460,6 +1492,11 @@ function hostGrabElec(id, by){
   if (takenElec.has(id)) return;
   const msg = { type:"elecTaken", id, by }; applyElecTaken(msg); hostBroadcast(msg);
   coinRespawnQueue.push({ kind:"elec", id, at: performance.now() + ELEC_RESPAWN_MS });   // respawn after 60s
+}
+function hostGrabBanana(id, by){
+  if (takenBananas.has(id)) return;
+  const msg = { type:"bananaTaken", id, by }; applyBananaTaken(msg); hostBroadcast(msg);
+  coinRespawnQueue.push({ kind:"banana", id, at: performance.now() + BANANA_RESPAWN_MS });   // respawn after 60s
 }
 function hostHitchTrailer(tid, by){
   const tr = trailers.find(t=>t.id===tid);
@@ -1497,6 +1534,7 @@ net.sendHonk = () => { if (net.isHost) hostBroadcast({ type:"honk", id:net.selfI
 net.grabCoin = (id) => { if (net.isHost) hostGrabCoin(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grab", id }); };
 net.grabBoost = (id) => { if (net.isHost) hostGrabBoost(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabBoost", id }); };
 net.grabElec = (id) => { if (net.isHost) hostGrabElec(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabElec", id }); };
+net.grabBanana = (id) => { if (net.isHost) hostGrabBanana(id, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"grabBanana", id }); };
 net.hitch = (tid) => { if (net.isHost) hostHitchTrailer(tid, self.id); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"hitch", tid }); };
 net.drop = (tid, x, y, angle) => { if (net.isHost) hostDropTrailer(tid, self.id, x, y, angle); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"drop", tid, x, y, angle }); };
 net.sendChat = (text) => { const msg={ type:"chat", id:self.id, name:self.name, color:self.config.color, text }; if (net.isHost) hostBroadcast(msg); else if (net.hostConn && net.hostConn.open) net.hostConn.send({ type:"chat", text }); };
@@ -1516,6 +1554,8 @@ function applyBoostTaken(m){ takenBoosts.add(m.id); if (m.by === self.id){ self.
 function applyBoostRespawn(m){ const b = fuelBoosts.find(b=>b.id===m.id); if (!b) return; b.x=m.x; b.y=m.y; takenBoosts.delete(m.id); requestedBoosts.delete(m.id); }
 function applyElecTaken(m){ takenElec.add(m.id); if (m.by === self.id){ self.battery = Math.min(self.maxBattery, self.battery + ELEC_FILL_AMOUNT); const e = elecFills.find(e=>e.id===m.id); if (e) floaters.push({ x:e.x, y:e.y, t:0, text:"+"+ELEC_FILL_AMOUNT+" ⚡", col:"#7dfbe0", big:true }); } }
 function applyElecRespawn(m){ const e = elecFills.find(e=>e.id===m.id); if (!e) return; e.x=m.x; e.y=m.y; takenElec.delete(m.id); requestedElec.delete(m.id); }
+function applyBananaTaken(m){ takenBananas.add(m.id); if (m.by === self.id){ self.food = Math.min(self.maxFood, self.food + BANANA_AMOUNT); const b = bananas.find(b=>b.id===m.id); if (b) floaters.push({ x:b.x, y:b.y, t:0, text:"+"+BANANA_AMOUNT+" 🍌", col:"#ffe14d", big:true }); } }
+function applyBananaRespawn(m){ const b = bananas.find(b=>b.id===m.id); if (!b) return; b.x=m.x; b.y=m.y; takenBananas.delete(m.id); requestedBananas.delete(m.id); }
 function processCoinRespawns(){
   if (!net.isHost || !coinRespawnQueue.length) return;
   const now = performance.now();
@@ -1525,6 +1565,7 @@ function processCoinRespawns(){
       const p = randomDrivablePoint();
       if (item.kind === "boost"){ const msg = { type:"boostRespawn", id:item.id, x:p.x, y:p.y }; applyBoostRespawn(msg); hostBroadcast(msg); }
       else if (item.kind === "elec"){ const msg = { type:"elecRespawn", id:item.id, x:p.x, y:p.y }; applyElecRespawn(msg); hostBroadcast(msg); }
+      else if (item.kind === "banana"){ const msg = { type:"bananaRespawn", id:item.id, x:p.x, y:p.y }; applyBananaRespawn(msg); hostBroadcast(msg); }
       else { const msg = { type:"coinRespawn", id:item.id, x:p.x, y:p.y }; applyCoinRespawn(msg); hostBroadcast(msg); }
     }
   }
@@ -1550,6 +1591,8 @@ function applyIncoming(m){
       (m.world.takenBoosts||[]).forEach(id => takenBoosts.add(id));
       if (m.world.elecs) for (const we of m.world.elecs){ const e=elecFills.find(e=>e.id===we.id); if (e){ e.x=we.x; e.y=we.y; } }
       (m.world.takenElecs||[]).forEach(id => takenElec.add(id));
+      if (m.world.bananas) for (const wb of m.world.bananas){ const b=bananas.find(b=>b.id===wb.id); if (b){ b.x=wb.x; b.y=wb.y; } }
+      (m.world.takenBananas||[]).forEach(id => takenBananas.add(id));
       (m.world.trailers||[]).forEach(applyTrailer);
     }
     return;
@@ -1565,6 +1608,8 @@ function applyIncoming(m){
   if (m.type === "boostRespawn"){ applyBoostRespawn(m); return; }
   if (m.type === "elecTaken"){ applyElecTaken(m); return; }
   if (m.type === "elecRespawn"){ applyElecRespawn(m); return; }
+  if (m.type === "bananaTaken"){ applyBananaTaken(m); return; }
+  if (m.type === "bananaRespawn"){ applyBananaRespawn(m); return; }
   if (m.type === "trailer"){ applyTrailer(m); return; }
   if (m.type === "delivered"){ applyDelivered(m); return; }
   if (m.type === "chat"){ if (m.id !== self.id) addChatLine(m.name, m.color, m.text); return; }
@@ -1700,31 +1745,42 @@ function update(dt, f){
   else if (s.reverseTarget){ const a=autoReverse(s); throttle=a.throttle; steer=a.steer; }
   else if (s.waypoints.length){ const a=autoForward(s, dt); throttle=a.throttle; steer=a.steer; }
   const prop = s.propulsion;
-  const hasEnergy = prop === "electric" ? (s.battery >= 0.1)
+  const moto = isMoto(s.config), ebike = isEbike(s.config), bicycle = isBicycle(s.config);
+  const hasEnergy = moto     ? (s.fuel > 0)
+                  : ebike    ? (s.battery >= 0.1)                          // e-bike is motor-driven; needs charge
+                  : bicycle  ? (s.food > 0)                               // pedal power
+                  : prop === "electric" ? (s.battery >= 0.1)
                   : prop === "hybrid"   ? (s.fuel > 0 || s.battery >= 0.1)  // hybrid runs on gas OR battery (need ≥0.1)
                   : (s.fuel > 0);
   s.evMode = (prop === "hybrid" && s.fuel <= 0 && s.maxBattery > 0);         // hybrid running on battery only
-  const boosting = (s.boost || s.padBoost) && throttle > 0 && hasEnergy;     // double-tap-hold accelerator, or gamepad bumper
+  const boosting = !bicycle && (s.boost || s.padBoost) && throttle > 0 && hasEnergy;   // bicycle has no boost
   s.boosting = boosting;
-  // per-propulsion boost top speed (mph = speed*11): fuel boost is 4.6*1.25, hybrid +5mph, electric +20mph
-  const moto = isMoto(s.config);
+  // top speeds (mph = speed*11): van 4.6, moto 85/130, e-bike 25/32, bicycle 15
   let MAXSPD, accel;
   if (moto){
     MAXSPD = boosting ? 130/11 : 85/11;                       // motorcycle: 85 mph cruising, 130 mph in boost
     accel = hasEnergy ? MAXSPD*0.045 : 0;                     // strong pickup so it reaches those speeds
+  } else if (ebike){
+    MAXSPD = boosting ? 32/11 : 25/11;                        // e-bike: 25 mph, 32 mph in boost
+    accel = hasEnergy ? MAXSPD*0.05 : 0;
+  } else if (bicycle){
+    MAXSPD = 15/11;                                           // bicycle: 15 mph, no boost
+    accel = hasEnergy ? MAXSPD*0.05 : 0;
   } else {
     const FBOOST = 4.6 * 1.25;
     const boostTop = prop === "electric" ? FBOOST + 20/11 : prop === "hybrid" ? FBOOST + 5/11 : FBOOST;
     MAXSPD = boosting ? boostTop : 4.6;
     accel = hasEnergy ? (boosting ? MAXSPD*0.045 : 0.16) : 0;
   }
+  s.speedCap = MAXSPD;                                        // for the HUD speed bar
   if (throttle > 0) s.speed += accel*throttle*f;
   else if (throttle < 0) s.speed += 0.12*throttle*f;
   s.speed *= Math.pow(0.965, f);
   s.speed = clamp(s.speed, -MAXSPD*0.5, MAXSPD);
   if (Math.abs(s.speed) < 0.01) s.speed = 0;
   if (Math.abs(s.speed) > 0.05){
-    const grip = s.config.rearTires === "4x4" ? 0.050 : 0.044;
+    let grip = s.config.rearTires === "4x4" ? 0.050 : 0.044;
+    if (isTwoWheeler(s.config)) grip *= 2;   // two-wheelers turn twice as sharp (half the turning circle)
     s.angle += steer * grip * (s.speed/MAXSPD) * f * (s.speed<0?-1:1);
   }
   const vx = Math.cos(s.angle)*s.speed*f, vy = Math.sin(s.angle)*s.speed*f;
@@ -1738,6 +1794,14 @@ function update(dt, f){
     if (moto){
       // motorcycle sips fuel: ¼ of the van's regular use cruising, ½ of it in boost
       s.fuel = Math.max(0, s.fuel - baseBurn * (boosting ? 0.5 : 0.25));
+    } else if (ebike){
+      // electric use: 1/10 of an electric vehicle's cruising drain, 1/7.5 of its boost drain; +25% when out of food
+      const elecDrain = boosting ? (baseBurn*1.4375*0.5/20)/7.5 : (baseBurn*0.5/20)/10;
+      const foodEmpty = s.maxFood > 0 && s.food <= 0;
+      s.battery = Math.max(0, s.battery - elecDrain * (foodEmpty ? 1.25 : 1));
+      if (s.food > 0) s.food = Math.max(0, s.food - baseBurn*0.05);   // food drains slowly (1/10 of a hybrid's fuel burn)
+    } else if (bicycle){
+      s.food = Math.max(0, s.food - baseBurn*0.05);                   // pedal power: food is the only energy
     } else {
     let mult = fuelFactor(s.config);
     const boostConsum = prop === "electric" ? 1.25*1.15 : prop === "hybrid" ? 1.25*1.10 : 1.25;   // boost efficiency
@@ -1763,7 +1827,7 @@ function update(dt, f){
   if (s.maxBattery > 0 && s.solarPanels > 0 && s.battery < s.maxBattery){
     const daylight = 1 - nightAmount();                            // 0 at night .. 1 full day
     if (daylight > 0.02){
-      const gain = s.solarPanels * daylight * (dt / (MIN_PER_HOUR/1000));   // 60 real s == 1 in-game hour
+      const gain = s.solarPanels * solarStrengthFor(s.config) * daylight * (dt / (MIN_PER_HOUR/1000));   // 60 real s == 1 in-game hour (e-bike panel = 1/10)
       s.battery = Math.min(s.maxBattery, s.battery + gain);
       s.solarAccum += gain; s.solarCharging = true;
       if (s.solarAccum >= 1){ s.solarAccum -= 1; s.batteryPulseT = 0; }     // trigger a "+1" pop on the bar
@@ -1812,6 +1876,9 @@ function update(dt, f){
   for (const e of elecFills){ if (takenElec.has(e.id) || requestedElec.has(e.id)) continue;
     const dx=s.x-e.x, dy=s.y-e.y; if (s.maxBattery > 0 && dx*dx+dy*dy < COIN_R*COIN_R){ requestedElec.add(e.id); net.grabElec(e.id); }   // battery vehicles only
   }
+  for (const b of bananas){ if (takenBananas.has(b.id) || requestedBananas.has(b.id)) continue;
+    const dx=s.x-b.x, dy=s.y-b.y; if (s.maxFood > 0 && s.food < s.maxFood && dx*dx+dy*dy < COIN_R*COIN_R){ requestedBananas.add(b.id); net.grabBanana(b.id); }   // food vehicles only
+  }
 
   // ---- trailer hitch / drop (hold T ~0.35s) ----
   const myTrailer = trailers.find(t=>t.towedBy===self.id);
@@ -1827,11 +1894,17 @@ function update(dt, f){
   }
 
   const warnEl = document.getElementById("warn");
-  const dead = s.propulsion === "electric" ? (s.battery < 0.1)
+  const dead = moto     ? (s.fuel <= 0)
+             : ebike    ? (s.battery < 0.1)
+             : bicycle  ? (s.food <= 0)
+             : s.propulsion === "electric" ? (s.battery < 0.1)
              : s.propulsion === "hybrid"   ? (s.fuel <= 0 && s.battery < 0.1)
              : (s.fuel <= 0);
   if (dead && Math.abs(s.speed) < 0.2){
-    warnEl.textContent = s.propulsion === "electric" ? "BATTERY DEAD — sit in the sun with a solar panel ☀"
+    warnEl.textContent = ebike    ? "BATTERY DEAD — recharge ⚡ or find a charger"
+                       : bicycle  ? "TOO HUNGRY — find a banana 🍌"
+                       : moto     ? "OUT OF FUEL — grab coins & get to a ⛽"
+                       : s.propulsion === "electric" ? "BATTERY DEAD — sit in the sun with a solar panel ☀"
                        : s.propulsion === "hybrid"   ? "OUT OF POWER — refuel ⛽ or recharge ⚡"
                        : "OUT OF FUEL — grab coins & get to a ⛽";
     warnEl.style.display = "block";
@@ -1982,6 +2055,11 @@ function render(){
     ctx.strokeStyle = "#2a9d8f"; ctx.lineWidth = 2; ctx.stroke();
     ctx.fillStyle = "#0d2a28"; ctx.font = "800 13px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("⚡", e.x, e.y+bob+1);
   }
+  for (const b of bananas){ if (takenBananas.has(b.id) || !vis(b.x,b.y,20)) continue;
+    const bob = Math.sin(clock*4 + b.x*0.05)*2;
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(b.x, b.y+10, 8, 3, 0, 0, 7); ctx.fill();
+    ctx.font = "800 20px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("🍌", b.x, b.y+bob+1);
+  }
 
   // trailers (draw before vans)
   for (const tr of trailers){ if (!vis(tr.tx,tr.ty,60)) continue; drawTrailer(tr); }
@@ -2117,6 +2195,7 @@ function drawMinimap(){
   for (const st of stations){ ctx.fillStyle="#ffb03a"; ctx.beginPath(); ctx.arc(x0+st.x*mmScale, y0+st.y*mmScale, 2.6, 0, 7); ctx.fill(); }
   for (const ch of chargers){ ctx.fillStyle="#4fd1c5"; ctx.beginPath(); ctx.arc(x0+ch.x*mmScale, y0+ch.y*mmScale, 2.8, 0, 7); ctx.fill(); ctx.strokeStyle="#0d2a28"; ctx.lineWidth=1; ctx.stroke(); }
   for (const e of elecFills){ if (takenElec.has(e.id)) continue; ctx.fillStyle="#7dfbe0"; ctx.beginPath(); ctx.arc(x0+e.x*mmScale, y0+e.y*mmScale, 2.2, 0, 7); ctx.fill(); }
+  for (const b of bananas){ if (takenBananas.has(b.id)) continue; ctx.fillStyle="#ffe14d"; ctx.beginPath(); ctx.arc(x0+b.x*mmScale, y0+b.y*mmScale, 2, 0, 7); ctx.fill(); }
   for (const tr of trailers){ ctx.fillStyle="#c9a24a"; ctx.fillRect(x0+tr.tx*mmScale-2, y0+tr.ty*mmScale-2, 4, 4); }
   const blip=(px,py,color,me)=>{ const bx=x0+px*mmScale, by=y0+py*mmScale; if(me){ ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(bx,by,4.5,0,7); ctx.fill(); } ctx.fillStyle=color; ctx.beginPath(); ctx.arc(bx,by,me?3:3.2,0,7); ctx.fill(); };
   for (const r of remotes.values()) blip(r.rx, r.ry, (r.config&&r.config.color)||"#fff", false);
@@ -2130,8 +2209,8 @@ function drawMinimap(){
 function drawStats(){
   ctx.textAlign="left"; ctx.textBaseline="alphabetic";
   const x0 = 16, w = 210;
-  const hasFuelBar = self.maxFuel > 0, hasBatBar = self.maxBattery > 0;
-  const nBars = (hasFuelBar?1:0) + (hasBatBar?1:0);
+  const hasFuelBar = self.maxFuel > 0, hasBatBar = self.maxBattery > 0, hasFoodBar = self.maxFood > 0;
+  const nBars = (hasFuelBar?1:0) + (hasBatBar?1:0) + (hasFoodBar?1:0);
   const panelH = 74 + nBars*30;
   const y0 = VH - panelH;
   ctx.fillStyle="rgba(10,15,22,0.82)"; roundRect(ctx, x0-8, y0-8, w+16, panelH+2, 12); ctx.fill();
@@ -2146,7 +2225,7 @@ function drawStats(){
   ctx.fillStyle="#8496a6"; ctx.font="600 11px system-ui"; ctx.fillText("mph", x0+ (mph>=10?36:24), y0+62);
   const sbx=x0+72, sbw=w-72;
   ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, sbx, y0+50, sbw, 8, 4); ctx.fill();
-  ctx.fillStyle="#4fd1c5"; roundRect(ctx, sbx, y0+50, sbw*clamp(Math.abs(self.speed)/4.6,0,1), 8, 4); ctx.fill();
+  ctx.fillStyle="#4fd1c5"; roundRect(ctx, sbx, y0+50, sbw*clamp(Math.abs(self.speed)/(self.speedCap||4.6),0,1), 8, 4); ctx.fill();
   if (self.boosting){ ctx.fillStyle="#ff8b5b"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("⏩ BOOST", x0+w, y0+40); ctx.textAlign="left"; }
   else if (self.evMode){ ctx.fillStyle="#4fd1c5"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("⚡ EV MODE", x0+w, y0+40); ctx.textAlign="left"; }
   else if (self.cruise){ ctx.fillStyle="#5ee0a0"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("ECO · 25% less", x0+w, y0+40); ctx.textAlign="left"; }
@@ -2154,6 +2233,18 @@ function drawStats(){
   let by = y0 + 82;
   if (hasFuelBar){ drawEnergyBar(x0, by, w, "FUEL", self.fuel, self.maxFuel, false); by += 30; }
   if (hasBatBar){ drawEnergyBar(x0, by, w, "BATTERY", self.battery, self.maxBattery, true); by += 30; }
+  if (hasFoodBar){ drawFoodBar(x0, by, w, self.food, self.maxFood); by += 30; }
+}
+function drawFoodBar(x0, y, w, val, max){
+  ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+  const empty = val <= 0.0001;
+  ctx.fillStyle = empty ? "#ff9a3c" : "#9fb0c0"; ctx.font = (empty ? "700 " : "600 ") + "11px system-ui";
+  ctx.fillText(empty ? "FOOD EMPTY — FIND A BANANA 🍌" : "FOOD 🍌", x0, y);
+  ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, x0, y+6, w, 14, 6); ctx.fill();
+  const r = clamp(val/max, 0, 1);
+  const col = r>0.5?"#ffe14d":r>0.2?"#f1c40f":"#ff6b5b";
+  ctx.fillStyle = col; roundRect(ctx, x0, y+6, w*r, 14, 6); ctx.fill();
+  ctx.fillStyle="#dfe7ee"; ctx.font="600 11px system-ui"; ctx.textAlign="right"; ctx.fillText((Math.round(val*10)/10) + " / " + max, x0+w, y); ctx.textAlign="left";
 }
 function drawEnergyBar(x0, y, w, label, val, max, isBattery){
   ctx.textAlign="left"; ctx.textBaseline="alphabetic";
