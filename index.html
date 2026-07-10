@@ -1549,7 +1549,14 @@ function render(){
 
   // night tint over the world (HUD drawn after stays bright)
   const night = nightAmount();
-  if (night > 0.001){ ctx.fillStyle = "rgba(12,18,48," + (0.55*night).toFixed(3) + ")"; ctx.fillRect(0,0,VW,VH); }
+  if (night > 0.001){
+    ctx.fillStyle = "rgba(12,18,48," + (0.55*night).toFixed(3) + ")"; ctx.fillRect(0,0,VW,VH);
+    // auto headlights: warm light cuts through the dark (drawn additively over the tint)
+    ctx.save(); ctx.translate(ox, oy); ctx.globalCompositeOperation = "lighter";
+    for (const r of remotes.values()) if (vis(r.rx, r.ry, 150)) drawHeadlights(r.rx, r.ry, r.rangle, r.config||{}, night);
+    drawHeadlights(self.x, self.y, self.angle, self.config, night);
+    ctx.globalCompositeOperation = "source-over"; ctx.restore();
+  }
 
   drawMinimap();
   if (self.refueling) prompt("⛽ Refueling…", "#52c46a");
@@ -1561,6 +1568,23 @@ function render(){
   if (touchMode) updateTouchButtons();
 }
 
+function drawHeadlights(x, y, angle, config, a){
+  // soft glow around the vehicle so it's a little lit up
+  let g = ctx.createRadialGradient(x, y, 4, x, y, 44);
+  g.addColorStop(0, "rgba(255,244,205," + (0.22*a).toFixed(3) + ")");
+  g.addColorStop(1, "rgba(255,244,205,0)");
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 44, 0, 7); ctx.fill();
+  // forward beam from the front of the van
+  const L = vanLength(config)/2;
+  ctx.save(); ctx.translate(x + Math.cos(angle)*L, y + Math.sin(angle)*L); ctx.rotate(angle);
+  const beamLen = 130, beamW = 52;
+  const bg = ctx.createLinearGradient(0, 0, beamLen, 0);
+  bg.addColorStop(0, "rgba(255,238,185," + (0.34*a).toFixed(3) + ")");
+  bg.addColorStop(1, "rgba(255,238,185,0)");
+  ctx.fillStyle = bg;
+  ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(beamLen, -beamW/2); ctx.lineTo(beamLen, beamW/2); ctx.lineTo(0, 8); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
 function drawWorldVan(x,y,angle,config,name,fuel,maxFuel,battery,maxBattery,isSelf){
   ctx.save(); ctx.translate(x,y); ctx.rotate(angle); drawVan(ctx, config); ctx.restore();
   ctx.textAlign="center"; ctx.textBaseline="alphabetic"; ctx.font="600 12px system-ui";
