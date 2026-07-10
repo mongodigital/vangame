@@ -923,7 +923,7 @@ startBtn.onclick = () => {
     propulsion: config.propulsion, battery: maxBatteryFor(config), maxBattery: maxBatteryFor(config),
     solarPanels: solarPanelsFor(config), solarAccum: 0, solarCharging: false, batteryPulseT: 99,
     coins: 100, refueling:false, atStation:false, fuelSession:false, fuelMsg:"",
-    atCharger:false, chargeSession:false, charging:false, chargeMsg:"",
+    atCharger:false, chargeSession:false, charging:false, chargeMsg:"", evMode:false,
     tHold:0, tConsumed:false, fuelHold:false, throttleHold:0, cruise:false,
     waypoints:[], reverseTarget:null, hitchIntent:null, stuckT:0,
     boost:false, boosting:false, accelTapArmed:false, accelTapTime:0, accelPressTime:0,
@@ -1248,7 +1248,10 @@ function update(dt, f){
   else if (s.reverseTarget){ const a=autoReverse(s); throttle=a.throttle; steer=a.steer; }
   else if (s.waypoints.length){ const a=autoForward(s, dt); throttle=a.throttle; steer=a.steer; }
   const prop = s.propulsion;
-  const hasEnergy = prop === "electric" ? (s.battery > 0) : (s.fuel > 0);   // what powers the wheels
+  const hasEnergy = prop === "electric" ? (s.battery > 0)
+                  : prop === "hybrid"   ? (s.fuel > 0 || s.battery > 0)     // hybrid runs on gas OR battery
+                  : (s.fuel > 0);
+  s.evMode = (prop === "hybrid" && s.fuel <= 0 && s.maxBattery > 0);         // hybrid running on battery only
   const boosting = s.boost && throttle > 0 && hasEnergy;                     // double-tap-hold accelerator
   s.boosting = boosting;
   // per-propulsion boost top speed (mph = speed*11): fuel boost is 4.6*1.25, hybrid +5mph, electric +20mph
@@ -1280,8 +1283,12 @@ function update(dt, f){
     if (prop === "fuel"){
       s.fuel = Math.max(0, s.fuel - stdBurn);
     } else if (prop === "hybrid"){
-      s.fuel = Math.max(0, s.fuel - stdBurn*0.5);                   // half the fuel of a fuel vehicle
-      s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20);        // 1 electricity per 20 fuel used
+      if (s.fuel > 0){
+        s.fuel = Math.max(0, s.fuel - stdBurn*0.5);                 // on gas: half the fuel...
+        s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20);      // ...plus 1 electricity per 20 fuel
+      } else {
+        s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20 * 1.5);// electric-only: drains 50% faster
+      }
     } else { // electric
       s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20);        // same drain rate as a hybrid
     }
@@ -1355,9 +1362,13 @@ function update(dt, f){
   }
 
   const warnEl = document.getElementById("warn");
-  const dead = s.propulsion === "electric" ? (s.battery <= 0) : (s.fuel <= 0);
+  const dead = s.propulsion === "electric" ? (s.battery <= 0)
+             : s.propulsion === "hybrid"   ? (s.fuel <= 0 && s.battery <= 0)
+             : (s.fuel <= 0);
   if (dead && Math.abs(s.speed) < 0.2){
-    warnEl.textContent = s.propulsion === "electric" ? "BATTERY DEAD — sit in the sun with a solar panel ☀" : "OUT OF FUEL — grab coins & get to a ⛽";
+    warnEl.textContent = s.propulsion === "electric" ? "BATTERY DEAD — sit in the sun with a solar panel ☀"
+                       : s.propulsion === "hybrid"   ? "OUT OF POWER — refuel ⛽ or recharge ⚡"
+                       : "OUT OF FUEL — grab coins & get to a ⛽";
     warnEl.style.display = "block";
   } else warnEl.style.display = "none";
   reveal(s.x, s.y);
@@ -1648,6 +1659,7 @@ function drawStats(){
   ctx.fillStyle="rgba(255,255,255,0.12)"; roundRect(ctx, sbx, y0+50, sbw, 8, 4); ctx.fill();
   ctx.fillStyle="#4fd1c5"; roundRect(ctx, sbx, y0+50, sbw*clamp(Math.abs(self.speed)/4.6,0,1), 8, 4); ctx.fill();
   if (self.boosting){ ctx.fillStyle="#ff8b5b"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("⏩ BOOST", x0+w, y0+40); ctx.textAlign="left"; }
+  else if (self.evMode){ ctx.fillStyle="#4fd1c5"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("⚡ EV MODE", x0+w, y0+40); ctx.textAlign="left"; }
   else if (self.cruise){ ctx.fillStyle="#5ee0a0"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("ECO · 25% less", x0+w, y0+40); ctx.textAlign="left"; }
   // energy bars
   let by = y0 + 82;
