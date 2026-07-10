@@ -343,7 +343,7 @@ const KEYS = [                                   // SW island chain ("the keys")
   { x:1050, y:7700, r:360, h:10 },
 ];
 const FLATS = [                                  // terrain flattened to pads
-  { x0:3560, y0:5400, x1:7500, y1:7300, h:5,  feather:680 },   // Vice Bay city
+  { x0:3560, y0:5400, x1:7060, y1:6960, h:5,  feather:680 },   // Vice Bay city
   { x0:1650, y0:5950, x1:3350, y1:7150, h:6,  feather:380 },   // Sunhaven airport
   { x0:5250, y0:7280, x1:6950, y1:7800, h:4,  feather:300 },   // Port Salado
   { x0:9750, y0:1850, x1:10950, y1:2750, h:38, feather:420 },  // Dusthaven (desert town)
@@ -402,7 +402,8 @@ const CLIFF_SLOPE = 0.27;                        // steeper than this off-road =
 function cliffAt(x,y){ return slopeMagAt(x,y) > CLIFF_SLOPE; }
 
 // City occupies a sub-rectangle; the rest is countryside.
-const CITY = { x0: 3600, y0: 5450, x1: 7450, y1: 7250 };
+// (x1/y1 sit exactly on the outermost grid roads so the grid has no dangling strips)
+const CITY = { x0: 3600, y0: 5450, x1: 6988, y1: 6860 };
 
 // --- roads (visual + drivable; only buildings/water/cliffs/edges collide) ---
 const roads = [];        // straight rects  ({hwy,pier,tarmac} flags style them)
@@ -414,37 +415,56 @@ for (let y = CITY.y0; y <= CITY.y1 + 1; y += stepY) hys.push(Math.round(y));
 vxs.forEach(x => roads.push({ x: x - roadW/2, y: CITY.y0 - roadW, w: roadW, h: (CITY.y1 - CITY.y0) + 2*roadW }));
 hys.forEach(y => roads.push({ x: CITY.x0 - roadW, y: y - roadW/2, w: (CITY.x1 - CITY.x0) + 2*roadW, h: roadW }));
 
-// island ring highway (smooth loop threaded through every district)
+// ---- island ring highway ----
+// An OPEN smoothed polyline whose two ends land exactly on the city's main
+// drag (the y=6860 grid road): the highway feeds into the street grid on the
+// city's west side, and picks up again on its east side — no dangling ends,
+// and no diagonal slicing through city blocks.
 (() => {
-  const pts = [
-    {x:3700,y:7050},{x:2500,y:6650},{x:1500,y:5450},{x:1350,y:3900},{x:2100,y:2450},
-    {x:3400,y:1350},{x:5100,y:800},{x:6850,y:1050},{x:8600,y:1500},{x:10050,y:2250},
-    {x:10900,y:3500},{x:10950,y:4900},{x:10050,y:6050},{x:8800,y:6800},{x:7500,y:7050},
+  const P = [
+    {x:3600, y:6860},                                       // WEST junction: city main drag
+    {x:2500, y:6650},{x:1500, y:5450},{x:1350, y:3900},     // marsh + west coast
+    {x:2100, y:2450},{x:3400, y:1350},{x:5100, y:800},      // forest + north coast
+    {x:6850, y:1050},{x:8600, y:1500},{x:10050, y:2250},    // Northpoint + NE coast
+    {x:10900, y:3500},{x:10950, y:4900},{x:10450, y:5950},  // east coast
+    {x:9600, y:6650},{x:8500, y:6800},                      // Neon Mile beach strip
+    {x:6988, y:6860},                                       // EAST junction: city main drag
   ];
-  for (let i=0;i<pts.length;i++){
-    const a=pts[i], b=pts[(i+1)%pts.length], c=pts[(i+2)%pts.length];
-    roadCurves.push({ x0:(a.x+b.x)/2, y0:(a.y+b.y)/2, cx:b.x, cy:b.y, x1:(b.x+c.x)/2, y1:(b.y+c.y)/2, w:78, hwy:true });
+  const mid=(a,b)=>({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
+  const N=P.length-1;
+  roadCurves.push({ x0:P[0].x, y0:P[0].y, cx:P[1].x, cy:P[1].y, x1:mid(P[1],P[2]).x, y1:mid(P[1],P[2]).y, w:78, hwy:true });
+  for (let i=2;i<=N-2;i++){
+    const a=mid(P[i-1],P[i]), b=mid(P[i],P[i+1]);
+    roadCurves.push({ x0:a.x, y0:a.y, cx:P[i].x, cy:P[i].y, x1:b.x, y1:b.y, w:78, hwy:true });
   }
+  const a=mid(P[N-2],P[N-1]);
+  roadCurves.push({ x0:a.x, y0:a.y, cx:P[N-1].x, cy:P[N-1].y, x1:P[N].x, y1:P[N].y, w:78, hwy:true });
 })();
-// cross-island highway: city → foothills → desert town
-roadCurves.push({ x0:6350, y0:5450, cx:6500, cy:4600, x1:7100, y1:4150, w:74 });
+// cross-island highway: leaves the city grid at the top of a vertical avenue
+// (x=6504), climbs the foothills, and ends merging into the ring at Dusthaven.
+roadCurves.push({ x0:6504, y0:5450, cx:6600, cy:4600, x1:7100, y1:4150, w:74 });
 roadCurves.push({ x0:7100, y0:4150, cx:7800, cy:3650, x1:8900, y1:3050, w:74 });
 roadCurves.push({ x0:8900, y0:3050, cx:9700, cy:2650, x1:10350, y1:2300, w:74 });
-// mountain switchbacks up to the Solano overlook
+// mountain access road: branches off the cross-island highway at the foothills
+// junction (7100,4150) and runs to the base of the switchbacks.
+roadCurves.push({ x0:7100, y0:4150, cx:6300, cy:3900, x1:5600, y1:2950, w:66 });
+// mountain switchbacks up to the Solano overlook (the top is a scenic dead end)
 roadCurves.push({ x0:5600, y0:2950, cx:6100, cy:2500, x1:5500, y1:2300, w:64 });
 roadCurves.push({ x0:5500, y0:2300, cx:4900, cy:2150, x1:5350, y1:1950, w:64 });
 roadCurves.push({ x0:5350, y0:1950, cx:5750, cy:1800, x1:5250, y1:1680, w:64 });
 roadCurves.push({ x0:5250, y0:1680, cx:4800, cy:1560, x1:5000, y1:1900, w:60 });
-// causeway to the keys (over the sea — bridges)
-roadCurves.push({ x0:3350, y0:7050, cx:3200, cy:7250, x1:2950, y1:7280, w:66, bridge:true });
+// causeway to the keys: branches off the ring on the marsh coast (a point on
+// the ring's first segment), then island-hops on bridges to Key Sur.
+roadCurves.push({ x0:3087, y0:6730, cx:3010, cy:7000, x1:2950, y1:7280, w:66, bridge:true });
 roadCurves.push({ x0:2950, y0:7280, cx:2450, cy:7420, x1:2000, y1:7520, w:66, bridge:true });
 roadCurves.push({ x0:2000, y0:7520, cx:1500, cy:7650, x1:1080, y1:7700, w:66, bridge:true });
-// airport + port + Neon Mile connectors
-roadCurves.push({ x0:3600, y0:6390, cx:3100, cy:6390, x1:2600, y1:6500, w:70 });
-roadCurves.push({ x0:6100, y0:7250, cx:6100, cy:7450, x1:6100, y1:7560, w:70 });
-roadCurves.push({ x0:7450, y0:6860, cx:8100, cy:6800, x1:8900, y1:6800, w:72 });
-roadCurves.push({ x0:8900, y0:6800, cx:9600, cy:6800, x1:10050, y1:6600, w:72 });
-// desert town streets
+// airport spur: city grid road (y=6390) west onto the Sunhaven apron
+roadCurves.push({ x0:3600, y0:6390, cx:3100, cy:6390, x1:2610, y1:6480, w:70 });
+// lighthouse spur: from the east-coast ring out to the sea cliff (dead end at the light)
+roadCurves.push({ x0:10925, y0:4200, cx:11080, cy:4180, x1:11180, y1:4150, w:56 });
+// port road: straight down from the city main drag into Port Salado
+roads.push({ x:6100-35, y:6860, w:70, h:750 });
+// desert town streets (join the cross-island highway's end at Dusthaven)
 roads.push({ x:9850, y:2260-32, w:1000, h:64 });
 roads.push({ x:10300-32, y:1900, w:64, h:800 });
 // airport apron + runway (drivable tarmac)
@@ -515,19 +535,6 @@ function fillBlock(x0, y0, x1, y1){
 for (let i=0;i<vxs.length-1;i++) for (let j=0;j<hys.length-1;j++){
   fillBlock(vxs[i]+roadW/2+8, hys[j]+roadW/2+8, vxs[i+1]-roadW/2-8, hys[j+1]-roadW/2-8);
 }
-// clear city buildings that sit on the highways/curves threading through town
-(() => {
-  const near=(b,px,py,m)=>{ const cx=clamp(px,b.x,b.x+b.w), cy=clamp(py,b.y,b.y+b.h); return (px-cx)**2+(py-cy)**2 < m*m; };
-  for (let i=buildings.length-1;i>=0;i--){
-    const b=buildings[i]; let hit=false;
-    for (const c of roadCurves){ if (hit) break;
-      for (let t=0;t<=1.0001;t+=0.05){ const u=1-t, px=u*u*c.x0+2*u*t*c.cx+t*t*c.x1, py=u*u*c.y0+2*u*t*c.cy+t*t*c.y1;
-        if (near(b,px,py,c.w/2+16)){ hit=true; break; } }
-    }
-    if (hit) buildings.splice(i,1);
-  }
-})();
-
 // --- POI structures (also collide) ---
 // Sunhaven International: terminal, tower, hangars
 buildings.push({ x:2050, y:6650, w:340, h:110, color:"#5f6b7c", roof:true, terminal:true });
@@ -557,9 +564,23 @@ buildings.push({ x:11220, y:4120, w:60, h:60, color:"#e8e4da", lighthouse:true }
 // Key Sur beach bar
 buildings.push({ x:1000, y:7640, w:110, h:70, color:"#c98a4a", roof:true, barn:true });
 
+// no building may sit on a road: sweep everything (city blocks + POIs) against
+// every curve's swept path and every straight road rect
+(() => {
+  const near=(b,px,py,m)=>{ const cx=clamp(px,b.x,b.x+b.w), cy=clamp(py,b.y,b.y+b.h); return (px-cx)**2+(py-cy)**2 < m*m; };
+  for (let i=buildings.length-1;i>=0;i--){
+    const b=buildings[i]; let hit=overlapsStraightRoad(b.x, b.y, b.w, b.h, -6);
+    for (const c of roadCurves){ if (hit) break;
+      for (let t=0;t<=1.0001;t+=0.04){ const u=1-t, px=u*u*c.x0+2*u*t*c.cx+t*t*c.x1, py=u*u*c.y0+2*u*t*c.cy+t*t*c.y1;
+        if (near(b,px,py,c.w/2+22)){ hit=true; break; } }
+    }
+    if (hit) buildings.splice(i,1);
+  }
+})();
+
 // --- fuel stations (spread across the island) ---
 const stations = [
-  { x:3840,  y:6620 }, { x:5540, y:5690 }, { x:7210, y:6620 }, { x:4808, y:5560 },
+  { x:3840,  y:6620 }, { x:5540, y:5690 }, { x:6900, y:6620 }, { x:4808, y:5560 },
   { x:2600, y:6500 }, { x:6100, y:7450 }, { x:8900, y:6560 },
   { x:10350, y:2450 }, { x:6850, y:1290 }, { x:5600, y:2950 }, { x:1150, y:7500 },
 ];
@@ -641,6 +662,7 @@ function biomesAt(x,y){
     if (e < 0.4) continue;                                    // not in the sea
     const inCity = x>CITY.x0 && x<CITY.x1 && y>CITY.y0 && y<CITY.y1;
     if (inCity && rng() < 0.9) continue;                      // countryside gets most of it
+    if (onRoadAt(x, y)) continue;                             // never in ANY road (straight or curved)
     if (overlapsStraightRoad(x-14, y-14, 28, 28, 6)) continue;
     if (blockedStatic(x, y, 6)) continue;
     const bio = biomesAt(x,y);
@@ -1373,7 +1395,8 @@ function addWaypoint(wx, wy){
 }
 
 /* ---------- text chat ---------- */
-const chatBar=document.getElementById("chatBar"), chatPanel=document.getElementById("chatPanel"),
+const chatWrap=document.getElementById("chat"),
+      chatBar=document.getElementById("chatBar"), chatPanel=document.getElementById("chatPanel"),
       chatLog=document.getElementById("chatLog"), chatInput=document.getElementById("chatInput"), chatBadge=document.getElementById("chatBadge");
 let chatOpen=false, unread=0;
 function esc(s){ return String(s).replace(/[&<>]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;" }[c])); }
@@ -2129,7 +2152,7 @@ function tryPickupDrop(){
 function dismountOrMount(){
   const s=self; if (!s || !playing || isWalker(s.config)) return;          // a walker is already on foot
   if (!s.onFoot){
-    const myTr = trailers.find(t=>t.towedBy===s.id); if (myTr) net.drop(myTr.id, myTr.tx, myTr.ty, myTr.tangle);   // let go of any trailer
+    // the trailer stays hitched to your parked vehicle while you're on foot
     s.parkX=s.x; s.parkY=s.y; s.parkAngle=s.angle; s.onFoot=true; s.speed=0; s.boost=false; s.accelTapArmed=false;
     s.x += Math.sin(s.angle)*22; s.y -= Math.cos(s.angle)*22;              // step out beside the vehicle
   } else {
@@ -2361,8 +2384,14 @@ function update(dt, f){
   for (const tr of trailers){
     if (tr.towedBy){
       let tx,ty,ta,cfg;
-      if (tr.towedBy===self.id){ tx=self.x; ty=self.y; ta=self.angle; cfg=self.config; }
-      else { const r=remotes.get(tr.towedBy); if(!r) continue; tx=r.rx; ty=r.ry; ta=r.rangle; cfg=r.config; }
+      if (tr.towedBy===self.id){
+        // if the owner is on foot, the trailer stays hitched to the PARKED vehicle
+        if (self.onFoot){ tx=self.parkX; ty=self.parkY; ta=self.parkAngle; } else { tx=self.x; ty=self.y; ta=self.angle; }
+        cfg=self.config;
+      }
+      else { const r=remotes.get(tr.towedBy); if(!r) continue;
+        if (r.onFoot){ tx=r.parkX ?? r.rx; ty=r.parkY ?? r.ry; ta=r.parkAngle ?? r.rangle; } else { tx=r.rx; ty=r.ry; ta=r.rangle; }
+        cfg=r.config; }
       const hitchDist = vanLength(cfg)/2 + 8;                    // coupling sits just behind the van
       const hx = tx - Math.cos(ta)*hitchDist, hy = ty - Math.sin(ta)*hitchDist;
       const arm = TRAILER_LEN/2 + 12;                            // rigid tongue: coupling → trailer centre
@@ -2858,6 +2887,9 @@ function drawStats(){
   const nBars = (hasFuelBar?1:0) + (hasBatBar?1:0) + (hasFoodBar?1:0);
   const panelH = 100 + nBars*30;
   const y0 = VH - panelH;
+  // keep the chat pinned just above this panel so it never covers the coin total
+  const chatBottom = (panelH + 22) + "px";
+  if (chatWrap.style.bottom !== chatBottom) chatWrap.style.bottom = chatBottom;
   ctx.fillStyle="rgba(10,15,22,0.82)"; roundRect(ctx, x0-8, y0-8, w+16, panelH+2, 12); ctx.fill();
   // coins
   ctx.fillStyle="#ffd23f"; ctx.beginPath(); ctx.arc(x0+8, y0+10, 8, 0, 7); ctx.fill();
