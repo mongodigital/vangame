@@ -1248,8 +1248,8 @@ function update(dt, f){
   else if (s.reverseTarget){ const a=autoReverse(s); throttle=a.throttle; steer=a.steer; }
   else if (s.waypoints.length){ const a=autoForward(s, dt); throttle=a.throttle; steer=a.steer; }
   const prop = s.propulsion;
-  const hasEnergy = prop === "electric" ? (s.battery > 0)
-                  : prop === "hybrid"   ? (s.fuel > 0 || s.battery > 0)     // hybrid runs on gas OR battery
+  const hasEnergy = prop === "electric" ? (s.battery >= 0.1)
+                  : prop === "hybrid"   ? (s.fuel > 0 || s.battery >= 0.1)  // hybrid runs on gas OR battery (need ≥0.1)
                   : (s.fuel > 0);
   s.evMode = (prop === "hybrid" && s.fuel <= 0 && s.maxBattery > 0);         // hybrid running on battery only
   const boosting = s.boost && throttle > 0 && hasEnergy;                     // double-tap-hold accelerator
@@ -1362,8 +1362,8 @@ function update(dt, f){
   }
 
   const warnEl = document.getElementById("warn");
-  const dead = s.propulsion === "electric" ? (s.battery <= 0)
-             : s.propulsion === "hybrid"   ? (s.fuel <= 0 && s.battery <= 0)
+  const dead = s.propulsion === "electric" ? (s.battery < 0.1)
+             : s.propulsion === "hybrid"   ? (s.fuel <= 0 && s.battery < 0.1)
              : (s.fuel <= 0);
   if (dead && Math.abs(s.speed) < 0.2){
     warnEl.textContent = s.propulsion === "electric" ? "BATTERY DEAD — sit in the sun with a solar panel ☀"
@@ -1711,7 +1711,7 @@ function drawEnergyBar(x0, y, w, label, val, max, isBattery){
     g.addColorStop(0,"rgba(255,255,255,0)"); g.addColorStop(0.5,"rgba(255,255,255,0.55)"); g.addColorStop(1,"rgba(255,255,255,0)");
     ctx.fillStyle = g; ctx.fillRect(x0, y+6, w, 14); ctx.restore();
   }
-  ctx.fillStyle="#dfe7ee"; ctx.font="600 11px system-ui"; ctx.textAlign="right"; ctx.fillText((isBattery? val.toFixed(1) : Math.round(val)) + " / " + max, x0+w, y); ctx.textAlign="left";
+  ctx.fillStyle="#dfe7ee"; ctx.font="600 11px system-ui"; ctx.textAlign="right"; ctx.fillText((isBattery? (Math.floor(val*10)/10).toFixed(1) : Math.round(val)) + " / " + max, x0+w, y); ctx.textAlign="left";
   // "+1" pop when solar adds a unit
   if (isBattery && self.batteryPulseT < 1){
     ctx.globalAlpha = Math.max(0, 1 - self.batteryPulseT);
