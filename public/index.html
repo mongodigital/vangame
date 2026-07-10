@@ -311,35 +311,150 @@ const PALETTE = ["#e84b3c","#f39c12","#f1c40f","#2ecc71","#1abc9c",
                  "#3498db","#5b6bf0","#9b59b6","#e84393","#ecf0f1","#34495e","#8d6748"];
 
 /* =====================================================================
-   WORLD / MAP  (deterministic — every client builds an identical map)
-   4× the old area. City block of filled buildings + open countryside
-   with curved roads, a drivable-around pond, foliage, fuel stations,
-   a trailer depot, and delivery drop-zones.
+   WORLD / MAP — ISLA SOLANO  (deterministic — every client builds an
+   identical map). A GTA-style island: neon city in the south, beaches
+   all around, a mountain in the north, central bay, desert northeast,
+   forest west, swamp, an airport, a port, piers, and a chain of keys.
+   Elevation is real: it shades the terrain, shows in the cluster, and
+   pulls on the vehicle (uphill slows you, downhill rolls you).
    ===================================================================== */
-const WORLD_W = 6400, WORLD_H = 4000;
+const WORLD_W = 12800, WORLD_H = 8000;
 const rng = mulberry32(24);
+const METERS_PER_PX = 0.5;                      // horizontal scale (for grade %)
+
+/* ---- deterministic value noise ---- */
+const NPERM = (() => { const r = mulberry32(1013), a = new Float32Array(4096); for (let i=0;i<4096;i++) a[i]=r(); return a; })();
+function nzHash(ix,iy){ return NPERM[((ix*73856093) ^ (iy*19349663)) & 4095]; }
+function noise2(x,y){
+  const ix=Math.floor(x), iy=Math.floor(y), fx=x-ix, fy=y-iy;
+  const sx=fx*fx*(3-2*fx), sy=fy*fy*(3-2*fy);
+  const a=nzHash(ix,iy), b=nzHash(ix+1,iy), c=nzHash(ix,iy+1), d=nzHash(ix+1,iy+1);
+  return a+(b-a)*sx+(c-a)*sy+(a-b-c+d)*sx*sy;
+}
+function fbm(x,y,oct=3){ let v=0,amp=0.5,f=1; for(let o=0;o<oct;o++){ v+=amp*noise2(x*f,y*f); amp*=0.5; f*=2; } return v; }
+function sstep(t,a,b){ const u=clamp((t-a)/(b-a),0,1); return u*u*(3-2*u); }
+function gauss(x,y,cx,cy,sx,sy){ const dx=(x-cx)/sx, dy=(y-cy)/sy; return Math.exp(-(dx*dx+dy*dy)*0.5); }
+
+/* ---- authored island features ---- */
+const ISLE = { cx:6400, cy:4150, rx:5600, ry:3350 };
+const KEYS = [                                   // SW island chain ("the keys")
+  { x:2950, y:7250, r:330, h:8  },
+  { x:2000, y:7500, r:280, h:6  },
+  { x:1050, y:7700, r:360, h:10 },
+];
+const FLATS = [                                  // terrain flattened to pads
+  { x0:3560, y0:5400, x1:7500, y1:7300, h:5,  feather:680 },   // Vice Bay city
+  { x0:1650, y0:5950, x1:3350, y1:7150, h:6,  feather:380 },   // Sunhaven airport
+  { x0:5250, y0:7280, x1:6950, y1:7800, h:4,  feather:300 },   // Port Salado
+  { x0:9750, y0:1850, x1:10950, y1:2750, h:38, feather:420 },  // Dusthaven (desert town)
+  { x0:6350, y0:800,  x1:7350, y1:1300, h:7,  feather:340 },   // Northpoint village
+  { x0:7700, y0:6350, x1:10150, y1:7050, h:5,  feather:360 },  // Neon Mile beach strip
+];
+function terrainHeight(x,y){
+  const nx=(x-ISLE.cx)/ISLE.rx, ny=(y-ISLE.cy)/ISLE.ry;
+  const ang=Math.atan2(ny,nx);
+  const wob = 0.80 + 0.26*fbm(Math.cos(ang)*2+7, Math.sin(ang)*2+3, 3) + 0.10*fbm(x*0.0009+40, y*0.0009+9, 2);
+  const d = Math.hypot(nx,ny)/Math.max(0.35,wob);
+  const base = sstep(d, 1.05, 0.86);                               // 0 ocean → 1 inland
+  let h = -34 + base*(44 + 24*fbm(x*0.00055+11, y*0.00055+5, 3));  // ocean −34m → rolling inland
+  for (const k of KEYS) h = Math.max(h, -34 + sstep(Math.hypot(x-k.x,y-k.y), k.r*1.6, k.r*0.5)*(42+k.h));
+  // mountains & hills (meters)
+  h += 340*gauss(x,y,4900,1750,1250,850);        // Mount Solano main mass
+  h += 95*gauss(x,y,4950,1780,280,240);          // steep summit cone (cliffy)
+  h += 170*gauss(x,y,6350,2150,950,700);         // east shoulder ridge
+  h += 120*gauss(x,y,3350,2500,900,750);         // west ridge over the forest
+  h += 70*gauss(x,y,6100,4300,1500,1000);        // central foothills
+  h += 45*gauss(x,y,4250,4900,650,520);          // Vista Heights (city overlook)
+  h += 55*gauss(x,y,11250,4150,320,260);         // Lighthouse Point sea cliff
+  // carves (below sea level = water)
+  h -= 70*gauss(x,y,8050,3350,1150,760);         // Palmetto Bay (central lake)
+  h -= 14*gauss(x,y,2450,6150,520,330);          // Gator Marsh pools
+  h -= 11*gauss(x,y,2050,5900,260,200);
+  h -= 12*gauss(x,y,2800,6350,240,170);
+  for (const fz of FLATS){                       // settle the pads
+    const ddx=Math.max(fz.x0-x,0,x-fz.x1), ddy=Math.max(fz.y0-y,0,y-fz.y1);
+    const m = 1 - sstep(Math.hypot(ddx,ddy), fz.feather*0.1, fz.feather);
+    h = h*(1-m) + fz.h*m;
+  }
+  return h;
+}
+
+/* ---- elevation grid (fast lookups everywhere else) ---- */
+const EG = 32, ECOLS = WORLD_W/EG + 1, EROWS = WORLD_H/EG + 1;
+const H = new Float32Array(ECOLS*EROWS);
+for (let gy=0; gy<EROWS; gy++) for (let gx=0; gx<ECOLS; gx++) H[gy*ECOLS+gx] = terrainHeight(gx*EG, gy*EG);
+function elevAt(x,y){
+  const fx=clamp(x/EG,0,ECOLS-1.001), fy=clamp(y/EG,0,EROWS-1.001);
+  const gx=Math.floor(fx), gy=Math.floor(fy), tx=fx-gx, ty=fy-gy, i=gy*ECOLS+gx;
+  const a=H[i], b=H[i+1], c=H[i+ECOLS], dd=H[i+ECOLS+1];
+  return a+(b-a)*tx+(c-a)*ty+(a-b-c+dd)*tx*ty;
+}
+function waterAt(x,y){ return elevAt(x,y) < 0; }
+function slopeMagAt(x,y){                        // m per world px
+  const e=24;
+  return Math.hypot(elevAt(x+e,y)-elevAt(x-e,y), elevAt(x,y+e)-elevAt(x,y-e))/(2*e);
+}
+function gradeAlong(x,y,angle){                  // m/px along heading (+ = uphill ahead)
+  const e=40, cx=Math.cos(angle)*e, cy=Math.sin(angle)*e;
+  return (elevAt(x+cx,y+cy)-elevAt(x-cx,y-cy))/(2*e);
+}
+const CLIFF_SLOPE = 0.27;                        // steeper than this off-road = wall
+function cliffAt(x,y){ return slopeMagAt(x,y) > CLIFF_SLOPE; }
 
 // City occupies a sub-rectangle; the rest is countryside.
-const CITY = { x0: 180, y0: 180, x1: 3560, y1: 2680 };
+const CITY = { x0: 3600, y0: 5450, x1: 7450, y1: 7250 };
 
-// --- roads (visual + drivable; only buildings/pond/edges collide) ---
-const roads = [];        // straight rects
-const roadCurves = [];   // {x0,y0,cx,cy,x1,y1,w}
+// --- roads (visual + drivable; only buildings/water/cliffs/edges collide) ---
+const roads = [];        // straight rects  ({hwy,pier,tarmac} flags style them)
+const roadCurves = [];   // {x0,y0,cx,cy,x1,y1,w,bridge}
 const stepX = 484, stepY = 470, roadW = 76;
 const vxs = [], hys = [];
 for (let x = CITY.x0; x <= CITY.x1 + 1; x += stepX) vxs.push(Math.round(x));
 for (let y = CITY.y0; y <= CITY.y1 + 1; y += stepY) hys.push(Math.round(y));
 vxs.forEach(x => roads.push({ x: x - roadW/2, y: CITY.y0 - roadW, w: roadW, h: (CITY.y1 - CITY.y0) + 2*roadW }));
 hys.forEach(y => roads.push({ x: CITY.x0 - roadW, y: y - roadW/2, w: (CITY.x1 - CITY.x0) + 2*roadW, h: roadW }));
-// world-spanning highways
-roads.push({ x: 0, y: 1360 - 40, w: WORLD_W, h: 80, hwy: true });
-roads.push({ x: 1836 - 40, y: 0, w: 80, h: WORLD_H, hwy: true });
-// curved country roads
-roadCurves.push({ x0:3560, y0:1360, cx:4400, cy:820,  x1:5300, y1:1420, w:72 });
-roadCurves.push({ x0:5300, y0:1420, cx:6050, cy:2050, x1:5250, y1:2900, w:72 });
-roadCurves.push({ x0:1836, y0:3000, cx:2700, cy:3320, x1:3700, y1:3120, w:72 });
-roadCurves.push({ x0:3700, y0:3120, cx:4700, cy:3020, x1:5250, y1:2900, w:72 });
-roadCurves.push({ x0:600,  y0:2900, cx:900,  cy:3400, x1:1836, y1:3300, w:70 });
+
+// island ring highway (smooth loop threaded through every district)
+(() => {
+  const pts = [
+    {x:3700,y:7050},{x:2500,y:6650},{x:1500,y:5450},{x:1350,y:3900},{x:2100,y:2450},
+    {x:3400,y:1350},{x:5100,y:800},{x:6850,y:1050},{x:8600,y:1500},{x:10050,y:2250},
+    {x:10900,y:3500},{x:10950,y:4900},{x:10050,y:6050},{x:8800,y:6800},{x:7500,y:7050},
+  ];
+  for (let i=0;i<pts.length;i++){
+    const a=pts[i], b=pts[(i+1)%pts.length], c=pts[(i+2)%pts.length];
+    roadCurves.push({ x0:(a.x+b.x)/2, y0:(a.y+b.y)/2, cx:b.x, cy:b.y, x1:(b.x+c.x)/2, y1:(b.y+c.y)/2, w:78, hwy:true });
+  }
+})();
+// cross-island highway: city → foothills → desert town
+roadCurves.push({ x0:6350, y0:5450, cx:6500, cy:4600, x1:7100, y1:4150, w:74 });
+roadCurves.push({ x0:7100, y0:4150, cx:7800, cy:3650, x1:8900, y1:3050, w:74 });
+roadCurves.push({ x0:8900, y0:3050, cx:9700, cy:2650, x1:10350, y1:2300, w:74 });
+// mountain switchbacks up to the Solano overlook
+roadCurves.push({ x0:5600, y0:2950, cx:6100, cy:2500, x1:5500, y1:2300, w:64 });
+roadCurves.push({ x0:5500, y0:2300, cx:4900, cy:2150, x1:5350, y1:1950, w:64 });
+roadCurves.push({ x0:5350, y0:1950, cx:5750, cy:1800, x1:5250, y1:1680, w:64 });
+roadCurves.push({ x0:5250, y0:1680, cx:4800, cy:1560, x1:5000, y1:1900, w:60 });
+// causeway to the keys (over the sea — bridges)
+roadCurves.push({ x0:3350, y0:7050, cx:3200, cy:7250, x1:2950, y1:7280, w:66, bridge:true });
+roadCurves.push({ x0:2950, y0:7280, cx:2450, cy:7420, x1:2000, y1:7520, w:66, bridge:true });
+roadCurves.push({ x0:2000, y0:7520, cx:1500, cy:7650, x1:1080, y1:7700, w:66, bridge:true });
+// airport + port + Neon Mile connectors
+roadCurves.push({ x0:3600, y0:6390, cx:3100, cy:6390, x1:2600, y1:6500, w:70 });
+roadCurves.push({ x0:6100, y0:7250, cx:6100, cy:7450, x1:6100, y1:7560, w:70 });
+roadCurves.push({ x0:7450, y0:6860, cx:8100, cy:6800, x1:8900, y1:6800, w:72 });
+roadCurves.push({ x0:8900, y0:6800, cx:9600, cy:6800, x1:10050, y1:6600, w:72 });
+// desert town streets
+roads.push({ x:9850, y:2260-32, w:1000, h:64 });
+roads.push({ x:10300-32, y:1900, w:64, h:800 });
+// airport apron + runway (drivable tarmac)
+roads.push({ x:1750, y:6300, w:1500, h:250, tarmac:true });
+roads.push({ x:2350, y:6550, w:260, h:400, tarmac:true });
+// piers (wooden, drivable, reach into the sea)
+roads.push({ x:9150-30, y:7000, w:60, h:560, pier:true });     // Neon Mile boardwalk pier
+roads.push({ x:6830-26, y:640, w:52, h:430, pier:true });      // Northpoint fishing pier
+roads.push({ x:5700-30, y:7780, w:60, h:330, pier:true });     // Port Salado dock A
+roads.push({ x:6350-30, y:7780, w:60, h:330, pier:true });     // Port Salado dock B
 
 function overlapsStraightRoad(x, y, w, h, m=14){
   for (const r of roads){
@@ -348,9 +463,35 @@ function overlapsStraightRoad(x, y, w, h, m=14){
   return false;
 }
 
-// --- pond (collidable — drive AROUND it) ---
-const pond = { x: 4780, y: 2470, r: 440 };
-function inPond(x, y, pad=0){ const dx=x-pond.x, dy=y-pond.y, r=pond.r+pad; return dx*dx+dy*dy < r*r; }
+/* ---- road raster (32px cells) — roads are exempt from water/cliff blocking ---- */
+const RG = new Uint8Array(ECOLS*EROWS);
+(() => {
+  const mark=(x,y,w)=>{ const r=Math.ceil((w/2+14)/EG);
+    const cgx=Math.round(x/EG), cgy=Math.round(y/EG);
+    for (let j=-r;j<=r;j++) for (let i=-r;i<=r;i++){
+      const gx=cgx+i, gy=cgy+j; if (gx<0||gy<0||gx>=ECOLS||gy>=EROWS) continue;
+      if (i*i+j*j<=r*r+1) RG[gy*ECOLS+gx]=1;
+    }};
+  for (const r of roads){
+    if (r.w>=r.h){ for (let x=r.x; x<=r.x+r.w; x+=EG/2) mark(x, r.y+r.h/2, r.h); }
+    else { for (let y=r.y; y<=r.y+r.h; y+=EG/2) mark(r.x+r.w/2, y, r.w); }
+  }
+  for (const c of roadCurves){
+    for (let t=0;t<=1.0001;t+=0.02){
+      const u=1-t, x=u*u*c.x0+2*u*t*c.cx+t*t*c.x1, y=u*u*c.y0+2*u*t*c.cy+t*t*c.y1;
+      mark(x,y,c.w);
+    }
+  }
+})();
+function onRoadAt(x,y){
+  const gx=clamp(Math.round(x/EG),0,ECOLS-1), gy=clamp(Math.round(y/EG),0,EROWS-1);
+  return !!RG[gy*ECOLS+gx];
+}
+function terrainBlocked(x,y){
+  if (elevAt(x,y) < -0.5) return !onRoadAt(x,y);       // sea & lake (beach shallows are drivable)
+  if (cliffAt(x,y)) return !onRoadAt(x,y);             // cliff faces
+  return false;
+}
 
 // --- buildings: fill each city block ---
 const buildings = [];
@@ -374,25 +515,89 @@ function fillBlock(x0, y0, x1, y1){
 for (let i=0;i<vxs.length-1;i++) for (let j=0;j<hys.length-1;j++){
   fillBlock(vxs[i]+roadW/2+8, hys[j]+roadW/2+8, vxs[i+1]-roadW/2-8, hys[j+1]-roadW/2-8);
 }
-// country structures (also collide)
-buildings.push({ x:5050, y:900,  w:150, h:110, color:"#9c3b30", roof:true, barn:true });
-buildings.push({ x:5230, y:905,  w:56,  h:56,  color:"#b8863f", silo:true });
-buildings.push({ x:520,  y:2260, w:170, h:120, color:"#41525f", warehouse:true, roof:true }); // depot warehouse
-buildings.push({ x:4200, y:3300, w:150, h:104, color:"#8a4034", roof:true, barn:true });
+// clear city buildings that sit on the highways/curves threading through town
+(() => {
+  const near=(b,px,py,m)=>{ const cx=clamp(px,b.x,b.x+b.w), cy=clamp(py,b.y,b.y+b.h); return (px-cx)**2+(py-cy)**2 < m*m; };
+  for (let i=buildings.length-1;i>=0;i--){
+    const b=buildings[i]; let hit=false;
+    for (const c of roadCurves){ if (hit) break;
+      for (let t=0;t<=1.0001;t+=0.05){ const u=1-t, px=u*u*c.x0+2*u*t*c.cx+t*t*c.x1, py=u*u*c.y0+2*u*t*c.cy+t*t*c.y1;
+        if (near(b,px,py,c.w/2+16)){ hit=true; break; } }
+    }
+    if (hit) buildings.splice(i,1);
+  }
+})();
 
-// --- fuel stations (spread across the bigger map) ---
+// --- POI structures (also collide) ---
+// Sunhaven International: terminal, tower, hangars
+buildings.push({ x:2050, y:6650, w:340, h:110, color:"#5f6b7c", roof:true, terminal:true });
+buildings.push({ x:2450, y:6680, w:52,  h:52,  color:"#8a93a5", tower:true });
+buildings.push({ x:1800, y:6640, w:130, h:100, color:"#77808f", roof:true, hangar:true });
+buildings.push({ x:2900, y:6640, w:130, h:100, color:"#77808f", roof:true, hangar:true });
+// Port Salado: depot warehouse + container stacks
+buildings.push({ x:5350, y:7380, w:170, h:120, color:"#41525f", warehouse:true, roof:true });
+(() => { const cc=["#b3502e","#2e6fb3","#3d8f5f","#b3962e","#7a4d9e"];
+  for (let i=0;i<11;i++){ const col=cc[(rng()*cc.length)|0];
+    buildings.push({ x:6480+ (i%4)*105, y:7370 + Math.floor(i/4)*80, w:88, h:34, color:col, container:true });
+  }})();
+// Dusthaven shacks (desert town)
+(() => { const dc=["#a8794a","#9c6f45","#b08753","#8f6a40"];
+  const spots=[[9950,2050],[10120,2340],[10480,2060],[10650,2330],[10420,2480],[9900,2420],[10750,2100],[10200,1960]];
+  for (const [sx,sy] of spots) buildings.push({ x:sx, y:sy, w:80+rng()*50, h:60+rng()*36, color:dc[(rng()*dc.length)|0], roof:rng()<0.5 });
+})();
+// Northpoint cottages
+(() => { const spots=[[6500,900],[6650,1120],[7000,900],[7150,1100],[6850,1180]];
+  for (const [sx,sy] of spots) buildings.push({ x:sx, y:sy, w:74+rng()*30, h:58+rng()*24, color:"#7d8ba0", roof:true });
+})();
+// Solano Foothills farm
+buildings.push({ x:6050, y:4550, w:150, h:110, color:"#9c3b30", roof:true, barn:true });
+buildings.push({ x:6230, y:4555, w:56,  h:56,  color:"#b8863f", silo:true });
+// Lighthouse Point
+buildings.push({ x:11220, y:4120, w:60, h:60, color:"#e8e4da", lighthouse:true });
+// Key Sur beach bar
+buildings.push({ x:1000, y:7640, w:110, h:70, color:"#c98a4a", roof:true, barn:true });
+
+// --- fuel stations (spread across the island) ---
 const stations = [
-  { x:560,  y:1360 }, { x:1836, y:560 }, { x:3050, y:2050 }, { x:1300, y:2520 },
-  { x:5300, y:1420 }, { x:4980, y:3060 }, { x:3500, y:3350 },
+  { x:3840,  y:6620 }, { x:5540, y:5690 }, { x:7210, y:6620 }, { x:4808, y:5560 },
+  { x:2600, y:6500 }, { x:6100, y:7450 }, { x:8900, y:6560 },
+  { x:10350, y:2450 }, { x:6850, y:1290 }, { x:5600, y:2950 }, { x:1150, y:7500 },
 ];
 const STATION_R = 92;
 // --- battery chargers (hybrid & electric only) ---
-const chargers = [ { x:2200, y:950 }, { x:3900, y:2200 }, { x:5250, y:700 } ];
+const chargers = [ { x:4324, y:5920 }, { x:6750, y:6860 }, { x:9600, y:6560 }, { x:7100, y:4150 }, { x:2900, y:6250 } ];
 const CHARGER_R = 92;
 
 // keep stations, chargers, spawn, and depot clear of buildings
-const SPAWN = { x: 360, y: 1372 };
-const DEPOT = { x: 620, y: 2470 };
+const SPAWN = { x: 3700, y: 6860 };
+const DEPOT = { x: 5620, y: 7520 };
+
+/* ---- named districts (banner pops by the minimap when you cross into one) ---- */
+const ZONES = [
+  { name:"Mount Solano",        x:4900,  y:1750, r:1350, sub:"the summit road is steep" },
+  { name:"Dusthaven",           x:10350, y:2300, r:800,  sub:"desert flats" },
+  { name:"Redsand Flats",       x:10300, y:2900, r:1500, sub:"" },
+  { name:"Palmetto Bay",        x:8050,  y:3350, r:1250, sub:"inland sea" },
+  { name:"Evergrass Woods",     x:2700,  y:3700, r:1500, sub:"old forest" },
+  { name:"Sunhaven International", x:2500, y:6550, r:620, sub:"airport" },
+  { name:"Gator Marsh",         x:2450,  y:6100, r:750,  sub:"mind the mud" },
+  { name:"Port Salado",         x:6100,  y:7550, r:600,  sub:"working docks" },
+  { name:"Neon Mile",           x:8950,  y:6750, r:900,  sub:"beach strip" },
+  { name:"Vista Heights",       x:4250,  y:4900, r:600,  sub:"city overlook" },
+  { name:"Solano Foothills",    x:6200,  y:4350, r:850,  sub:"farm country" },
+  { name:"Northpoint",          x:6850,  y:1050, r:600,  sub:"fishing village" },
+  { name:"Lighthouse Point",    x:11250, y:4150, r:520,  sub:"sea cliffs" },
+  { name:"Sunset Keys",         x:2450,  y:7400, r:750,  sub:"island chain" },
+  { name:"Key Sur",             x:1050,  y:7700, r:450,  sub:"end of the road" },
+  { name:"Vice Bay",            x:(CITY.x0+CITY.x1)/2, y:(CITY.y0+CITY.y1)/2, r:0, rect:CITY, sub:"downtown" },
+];
+function zoneAt(x,y){
+  for (const z of ZONES){
+    if (z.rect){ if (x>z.rect.x0-60 && x<z.rect.x1+60 && y>z.rect.y0-60 && y<z.rect.y1+60) return z; }
+    else if ((x-z.x)**2 + (y-z.y)**2 < z.r*z.r) return z;
+  }
+  return null;
+}
 (() => {
   const zones = stations.map(s => ({ x:s.x, y:s.y, r:STATION_R+30 }))
     .concat(chargers.map(c => ({ x:c.x, y:c.y, r:CHARGER_R+30 })))
@@ -409,26 +614,46 @@ const DEPOT = { x: 620, y: 2470 };
 })();
 
 function blockedStatic(x, y, pad=16){
-  if (inPond(x, y, pad)) return true;
+  if (terrainBlocked(x, y)) return true;
   for (const b of buildings){
     if (x > b.x-pad && x < b.x+b.w+pad && y > b.y-pad && y < b.y+b.h+pad) return true;
   }
   return false;
 }
 
-// --- more foliage across the countryside ---
+/* ---- biome weights (drive terrain color + foliage type) ---- */
+function biomesAt(x,y){
+  return {
+    desert: gauss(x,y,10400,2400,1900,1600),
+    forest: gauss(x,y,2700,3700,1650,1850),
+    swamp:  gauss(x,y,2450,6100,950,650),
+  };
+}
+
+// --- foliage across the island: palms on sand, pines in the woods & hills,
+//     cypress in the marsh, cactus in the desert, oaks elsewhere ---
 (() => {
   let placed=0, tries=0;
-  while (placed < 320 && tries < 6000){
+  while (placed < 1300 && tries < 30000){
     tries++;
     const x = 30 + rng()*(WORLD_W-60), y = 30 + rng()*(WORLD_H-60);
+    const e = elevAt(x,y);
+    if (e < 0.4) continue;                                    // not in the sea
     const inCity = x>CITY.x0 && x<CITY.x1 && y>CITY.y0 && y<CITY.y1;
-    if (inCity && rng() < 0.9) continue;              // countryside gets most of it
+    if (inCity && rng() < 0.9) continue;                      // countryside gets most of it
     if (overlapsStraightRoad(x-14, y-14, 28, 28, 6)) continue;
-    if (inPond(x, y, 14)) continue;
     if (blockedStatic(x, y, 6)) continue;
-    const bush = rng() < 0.45;
-    trees.push({ x, y, r: bush ? 8+rng()*6 : 14+rng()*13, c: rng()<0.5?"#3f8f4a":"#4fa356", bush });
+    const bio = biomesAt(x,y);
+    let kind = "oak";
+    if (e < 5 && rng() < 0.9) kind = "palm";                  // beaches
+    else if (bio.swamp > 0.35 && rng() < 0.85) kind = "cypress";
+    else if (bio.desert > 0.35) { if (rng() < 0.75) kind = "cactus"; else continue; }  // desert is sparse
+    else if (bio.forest > 0.3 || e > 90) kind = rng()<0.8 ? "pine" : "oak";
+    if (e > 280) { if (rng()<0.7) continue; kind = "pine"; }  // thin near the summit
+    const bush = kind==="oak" && rng() < 0.4;
+    const cols = { oak:["#3f8f4a","#4fa356"], pine:["#2e6b3a","#356f41"], palm:["#4fa356","#5cb264"], cypress:["#4a6b3f","#556f47"], cactus:["#4f8f5c","#5a9c66"] };
+    const cc = cols[kind];
+    trees.push({ x, y, r: bush ? 8+rng()*6 : (kind==="cactus" ? 9+rng()*5 : 13+rng()*12), c: cc[(rng()*2)|0], bush, kind });
     placed++;
   }
 })();
@@ -438,10 +663,10 @@ const COIN_VALUE = 5;
 const coins = [];
 (() => {
   let placed=0, tries=0, id=0;
-  while (placed < 90 && tries < 8000){
+  while (placed < 200 && tries < 40000){
     tries++;
     const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
-    if (blockedStatic(x, y, 14)) continue;
+    if (elevAt(x, y) < 0.4 || blockedStatic(x, y, 14)) continue;
     coins.push({ id:"c"+(id++), x, y });
     placed++;
   }
@@ -450,39 +675,39 @@ const takenCoins = new Set();
 const requestedCoins = new Set();   // coins we've already asked the host for
 
 // --- fuel boosts (restore 25 fuel each; up to 5; respawn like coins) ---
-const FUEL_BOOST_AMOUNT = 25, FUEL_BOOST_COUNT = 5;
+const FUEL_BOOST_AMOUNT = 25, FUEL_BOOST_COUNT = 9;
 const fuelBoosts = [];
 (() => {
   let placed=0, tries=0, id=0;
-  while (placed < FUEL_BOOST_COUNT && tries < 4000){ tries++;
+  while (placed < FUEL_BOOST_COUNT && tries < 20000){ tries++;
     const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
-    if (blockedStatic(x, y, 14)) continue;
+    if (elevAt(x, y) < 0.4 || blockedStatic(x, y, 14)) continue;
     fuelBoosts.push({ id:"b"+(id++), x, y }); placed++;
   }
 })();
 const takenBoosts = new Set(), requestedBoosts = new Set();
 
 // --- electric fills (+1 battery each; 2 on the map; respawn 60s after pickup) ---
-const ELEC_FILL_AMOUNT = 1, ELEC_FILL_COUNT = 2, ELEC_RESPAWN_MS = 60000;
+const ELEC_FILL_AMOUNT = 1, ELEC_FILL_COUNT = 4, ELEC_RESPAWN_MS = 60000;
 const elecFills = [];
 (() => {
   let placed=0, tries=0, id=0;
-  while (placed < ELEC_FILL_COUNT && tries < 4000){ tries++;
+  while (placed < ELEC_FILL_COUNT && tries < 20000){ tries++;
     const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
-    if (blockedStatic(x, y, 14)) continue;
+    if (elevAt(x, y) < 0.4 || blockedStatic(x, y, 14)) continue;
     elecFills.push({ id:"e"+(id++), x, y }); placed++;
   }
 })();
 const takenElec = new Set(), requestedElec = new Set();
 
 // --- bananas (+1 food each; 10 on the map; respawn 60s after pickup; food vehicles only) ---
-const BANANA_AMOUNT = 1, BANANA_COUNT = 10, BANANA_RESPAWN_MS = 60000;
+const BANANA_AMOUNT = 1, BANANA_COUNT = 22, BANANA_RESPAWN_MS = 60000;
 const bananas = [];
 (() => {
   let placed=0, tries=0, id=0;
-  while (placed < BANANA_COUNT && tries < 8000){ tries++;
+  while (placed < BANANA_COUNT && tries < 40000){ tries++;
     const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
-    if (blockedStatic(x, y, 14)) continue;
+    if (elevAt(x, y) < 0.4 || blockedStatic(x, y, 14)) continue;
     bananas.push({ id:"ban"+(id++), x, y }); placed++;
   }
 })();
@@ -491,11 +716,11 @@ const takenBananas = new Set(), requestedBananas = new Set();
 // --- loose world items for the inventory system (test props: tire, rope, hammer) ---
 const items = [];
 (() => {
-  const kinds = ["tire","rope","hammer","tire","rope","hammer"];
+  const kinds = ["tire","rope","hammer","tire","rope","hammer","tire","rope","hammer"];
   let i=0, tries=0;
-  while (i < kinds.length && tries < 8000){ tries++;
+  while (i < kinds.length && tries < 40000){ tries++;
     const x = 60 + rng()*(WORLD_W-120), y = 60 + rng()*(WORLD_H-120);
-    if (blockedStatic(x, y, 14)) continue;
+    if (elevAt(x, y) < 0.4 || blockedStatic(x, y, 14)) continue;
     items.push({ id:"it"+i, kind:kinds[i], x, y }); i++;
   }
 })();
@@ -515,14 +740,14 @@ function randomDrivablePoint(){
 // --- supply trailers (spawn at random drivable spots; deterministic so every client agrees) ---
 const TRAILER_LEN = 58, TRAILER_W = 32;
 const trailers = [];
-for (let i=0;i<2;i++){
+for (let i=0;i<3;i++){
   let x=SPAWN.x, y=SPAWN.y;
-  for (let tries=0; tries<400; tries++){ const rx=120+rng()*(WORLD_W-240), ry=120+rng()*(WORLD_H-240); if (!blockedStatic(rx,ry,22)){ x=rx; y=ry; break; } }
+  for (let tries=0; tries<2000; tries++){ const rx=120+rng()*(WORLD_W-240), ry=120+rng()*(WORLD_H-240); if (!blockedStatic(rx,ry,22)){ x=rx; y=ry; break; } }
   trailers.push({ id:"t"+i, x, y, angle:0, homeX:x, homeY:y, towedBy:null, tx:x, ty:y, tangle:0 });
 }
 
 // --- delivery drop-zones: nearest to depot pays 5, +5 for each farther ---
-const dropZones = [ {x:2650,y:620}, {x:3250,y:2450}, {x:5300,y:1420}, {x:5050,y:3120} ]
+const dropZones = [ {x:4808,y:6155}, {x:2480,y:6420}, {x:10350,y:2150}, {x:6850,y:1200}, {x:1050,y:7560} ]
   .map(d => ({ ...d, r:130, d2:(d.x-DEPOT.x)**2 + (d.y-DEPOT.y)**2 }))
   .sort((a,b) => a.d2 - b.d2)
   .map((d,i) => ({ x:d.x, y:d.y, r:d.r, id:"d"+i, value: COIN_VALUE*(i+1) }));
@@ -1814,7 +2039,7 @@ function loop(now){
 const VAN_R = 18;
 function blocked(x,y){
   if (x<VAN_R || y<VAN_R || x>WORLD_W-VAN_R || y>WORLD_H-VAN_R) return true;
-  if (inPond(x,y,VAN_R-4)) return true;
+  if (terrainBlocked(x,y)) return true;
   for (const b of buildings){
     const cx = clamp(x, b.x, b.x+b.w), cy = clamp(y, b.y, b.y+b.h);
     const dx = x-cx, dy = y-cy; if (dx*dx+dy*dy < VAN_R*VAN_R) return true;
@@ -1952,10 +2177,16 @@ function update(dt, f){
     accel = hasEnergy ? (boosting ? MAXSPD*0.045 : 0.16) : 0;
   }
   s.speedCap = MAXSPD;                                        // for the HUD speed bar
+  // ---- elevation: gravity along the heading — uphill drags, downhill rolls ----
+  const grade = gradeAlong(s.x, s.y, s.angle);                // m per px, + = uphill ahead
+  s.grade = grade; s.elev = elevAt(s.x, s.y);
+  const gPull = walker ? 0.10 : 0.30;                         // on foot you feel hills less
+  if (Math.abs(s.speed) > 0.02 || throttle !== 0) s.speed -= grade * gPull * f;
+  const downhillHeadroom = 1 + clamp(-grade, 0, 0.30) * 1.4;  // rolling downhill can beat the cap a bit
   if (throttle > 0) s.speed += accel*throttle*f;
   else if (throttle < 0) s.speed += 0.12*throttle*f;
   s.speed *= Math.pow(0.965, f);
-  s.speed = clamp(s.speed, -MAXSPD*0.5, MAXSPD);
+  s.speed = clamp(s.speed, -MAXSPD*0.5, MAXSPD*downhillHeadroom);
   if (Math.abs(s.speed) < 0.01) s.speed = 0;
   if (Math.abs(s.speed) > 0.05){
     let grip = s.config.rearTires === "4x4" ? 0.050 : 0.044;
@@ -2093,6 +2324,15 @@ function update(dt, f){
   } else warnEl.style.display = "none";
   reveal(s.x, s.y);
 
+  // district crossings → name banner by the minimap
+  if (zoneBanner) zoneBanner.t += dt;
+  s.zoneCheckT = (s.zoneCheckT || 0) + dt;
+  if (s.zoneCheckT > 0.4){
+    s.zoneCheckT = 0;
+    const z = zoneAt(s.x, s.y), nm = z ? z.name : null;
+    if (nm !== s.zoneName){ s.zoneName = nm; if (nm) zoneBanner = { name:nm, sub:(z.sub||""), t:0 }; }
+  }
+
   // remotes easing
   for (const r of remotes.values()){
     r.rx = lerp(r.rx, r.x, Math.min(1, 0.22*f));
@@ -2124,6 +2364,104 @@ function update(dt, f){
 }
 
 /* =====================================================================
+   TERRAIN RENDERING — cached 512px chunks with hillshade & biome color
+   ===================================================================== */
+function terrainColor(x,y){
+  const e = elevAt(x,y), bio = biomesAt(x,y);
+  let r,g,b;
+  if (e < 0){
+    const t = clamp(-e/26, 0, 1);                               // shallow → deep
+    r = 98-70*t; g = 176-104*t; b = 202-92*t;
+  } else if (e < 4.5){
+    r=229; g=210; b=162;                                        // sand
+    if (bio.swamp > 0.3){ r=148; g=131; b=94; }                 // mud
+    else if (bio.desert > 0.4){ r=222; g=183; b=136; }          // red sand
+  } else {
+    const dry = clamp((e-30)/170, 0, 1);                        // grass → dry scrub with altitude
+    r = 74+58*dry; g = 142+8*dry; b = 79+18*dry;
+    const fw = clamp(bio.forest*1.4,0,1);                       // forest darkens
+    r *= 1-fw*0.32; g *= 1-fw*0.10; b *= 1-fw*0.26;
+    const dw = clamp(bio.desert*1.5,0,1);                       // desert bleaches
+    r += (203-r)*dw*0.85; g += (164-g)*dw*0.85; b += (96-b)*dw*0.85;
+    const sw = clamp(bio.swamp*1.5,0,1);                        // swamp murks
+    r += (94-r)*sw*0.65; g += (121-g)*sw*0.65; b += (75-b)*sw*0.65;
+    if (e > 230){ const t=clamp((e-230)/120,0,1); r+=(139-r)*t; g+=(134-g)*t; b+=(124-b)*t; }   // rock
+    if (e > 380){ const t=clamp((e-380)/50,0,1);  r+=(218-r)*t; g+=(216-g)*t; b+=(212-b)*t; }   // pale summit
+  }
+  return [r,g,b];
+}
+const CHUNK = 512;
+const chunkCache = new Map();
+function getChunk(cx,cy){
+  const key = cx+"_"+cy;
+  let c = chunkCache.get(key); if (c) return c;
+  c = renderChunk(cx,cy); chunkCache.set(key,c);
+  if (chunkCache.size > 80){ chunkCache.delete(chunkCache.keys().next().value); }
+  return c;
+}
+function renderChunk(cx,cy){
+  const cv = document.createElement("canvas"); cv.width=CHUNK; cv.height=CHUNK;
+  const g = cv.getContext("2d");
+  const RES=16, wx0=cx*CHUNK, wy0=cy*CHUNK;
+  for (let py=0; py<CHUNK; py+=RES) for (let px=0; px<CHUNK; px+=RES){
+    const wx=wx0+px+RES/2, wy=wy0+py+RES/2;
+    let [r,gg,b] = terrainColor(wx,wy);
+    const e = elevAt(wx,wy);
+    if (e >= 0){                                                // hillshade, light from the NW
+      const d=14, sh = clamp(1 - ((elevAt(wx+d,wy)-elevAt(wx-d,wy)) + (elevAt(wx,wy+d)-elevAt(wx,wy-d)))/(2*d)*3.2, 0.74, 1.26);
+      r*=sh; gg*=sh; b*=sh;
+    } else {
+      const n = noise2(wx*0.004, wy*0.004)*10-5; gg+=n*0.5; b+=n;   // gentle water texture
+    }
+    g.fillStyle = `rgb(${r|0},${gg|0},${b|0})`;
+    g.fillRect(px,py,RES,RES);
+  }
+  // surf foam along the waterline
+  g.fillStyle = "rgba(255,255,255,0.34)";
+  for (let py=0; py<CHUNK; py+=RES) for (let px=0; px<CHUNK; px+=RES){
+    const wx=wx0+px+RES/2, wy=wy0+py+RES/2, e=elevAt(wx,wy);
+    if (e>=0 && e<1.5 && (elevAt(wx+RES,wy)<0||elevAt(wx-RES,wy)<0||elevAt(wx,wy+RES)<0||elevAt(wx,wy-RES)<0))
+      g.fillRect(px,py+RES*0.3,RES,RES/3);
+  }
+  // static overlays that live inside this chunk
+  g.save(); g.translate(-wx0,-wy0);
+  // city asphalt pad
+  g.fillStyle="#26303c"; g.fillRect(CITY.x0-40, CITY.y0-40, (CITY.x1-CITY.x0)+80, (CITY.y1-CITY.y0)+80);
+  // farm crop rows (Solano Foothills)
+  g.fillStyle="rgba(122,96,52,0.55)";
+  for (let ry=4700; ry<5040; ry+=44) g.fillRect(5760, ry, 860, 20);
+  // ferris wheel at the end of the Neon Mile pier
+  (()=>{ const fx=9150, fy=7460;
+    g.strokeStyle="#d95d7e"; g.lineWidth=5; g.beginPath(); g.arc(fx,fy,64,0,7); g.stroke();
+    g.lineWidth=2.5;
+    for (let i=0;i<8;i++){ const a=i*Math.PI/4; g.beginPath(); g.moveTo(fx,fy); g.lineTo(fx+Math.cos(a)*64, fy+Math.sin(a)*64); g.stroke();
+      g.fillStyle=["#ffd23f","#4fd1c5","#ff8b5b","#9b59b6"][i%4]; g.beginPath(); g.arc(fx+Math.cos(a)*64, fy+Math.sin(a)*64, 7, 0, 7); g.fill(); }
+    g.fillStyle="#ffe9a8"; g.beginPath(); g.arc(fx,fy,8,0,7); g.fill();
+  })();
+  // boats riding at anchor (port + northpoint + keys)
+  for (const [bx,by,ba] of [[5850,7920,0.4],[6200,7960,-0.3],[7050,540,0.2],[2500,7150,0.9],[900,7960,-0.5],[9300,7420,0.6]]){
+    g.save(); g.translate(bx,by); g.rotate(ba);
+    g.fillStyle="rgba(0,0,0,0.2)"; g.beginPath(); g.ellipse(2,3,26,10,0,0,7); g.fill();
+    g.fillStyle="#e8e4da"; g.beginPath(); g.moveTo(26,0); g.quadraticCurveTo(10,-11,-20,-8); g.lineTo(-20,8); g.quadraticCurveTo(10,11,26,0); g.fill();
+    g.fillStyle="#7d8ba0"; g.fillRect(-14,-4,16,8);
+    g.restore();
+  }
+  // a parked prop plane on the Sunhaven apron
+  (()=>{ const px=2480, py=6760;
+    g.save(); g.translate(px,py); g.rotate(-0.5);
+    g.fillStyle="rgba(0,0,0,0.2)"; g.beginPath(); g.ellipse(2,3,40,12,0,0,7); g.fill();
+    g.fillStyle="#dfe3e8"; g.fillRect(-36,-6,72,12);                    // fuselage
+    g.fillRect(-8,-40,14,80);                                           // wings
+    g.fillRect(-38,-14,8,28);                                           // tail
+    g.fillStyle="#4a5563"; g.beginPath(); g.arc(34,0,5,0,7); g.fill();  // nose
+    g.restore();
+  })();
+  g.restore();
+  return cv;
+}
+let zoneBanner = null;   // { name, sub, t } — district name popup by the minimap
+
+/* =====================================================================
    RENDER
    ===================================================================== */
 function render(){
@@ -2135,28 +2473,51 @@ function render(){
 
   ctx.save(); ctx.translate(ox, oy);
 
-  // ground: countryside grass + city asphalt block
-  ctx.fillStyle = "#2f6b3f"; ctx.fillRect(0,0,WORLD_W,WORLD_H);
-  ctx.fillStyle = "#26303c"; ctx.fillRect(CITY.x0-40, CITY.y0-40, (CITY.x1-CITY.x0)+80, (CITY.y1-CITY.y0)+80);
+  // ground: terrain chunks (sea, beaches, biomes, hillshaded relief)
+  {
+    const c0x=Math.max(0,Math.floor(vL/CHUNK)), c1x=Math.min(Math.ceil(WORLD_W/CHUNK)-1, Math.floor(vR/CHUNK));
+    const c0y=Math.max(0,Math.floor(vT/CHUNK)), c1y=Math.min(Math.ceil(WORLD_H/CHUNK)-1, Math.floor(vB/CHUNK));
+    for (let cy=c0y; cy<=c1y; cy++) for (let cx=c0x; cx<=c1x; cx++) ctx.drawImage(getChunk(cx,cy), cx*CHUNK, cy*CHUNK);
+  }
   ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 8; ctx.strokeRect(0,0,WORLD_W,WORLD_H);
 
-  // pond
-  ctx.fillStyle = "#2b6c8f"; ctx.beginPath(); ctx.arc(pond.x, pond.y, pond.r, 0, 7); ctx.fill();
-  ctx.strokeStyle = "#255c78"; ctx.lineWidth = 6; ctx.stroke();
-  ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.beginPath(); ctx.arc(pond.x-pond.r*0.3, pond.y-pond.r*0.3, pond.r*0.5, 0, 7); ctx.fill();
-
-  // straight roads
+  // straight roads (asphalt, airport tarmac, wooden piers)
   for (const r of roads){
     if (r.x>vR||r.x+r.w<vL||r.y>vB||r.y+r.h<vT) continue;
+    if (r.pier){
+      ctx.fillStyle = "#9b7a4e"; ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = "rgba(70,48,26,0.5)"; ctx.lineWidth = 1.5; ctx.beginPath();
+      if (r.h > r.w){ for (let py=r.y+10; py<r.y+r.h; py+=14){ ctx.moveTo(r.x, py); ctx.lineTo(r.x+r.w, py); } }
+      else { for (let px=r.x+10; px<r.x+r.w; px+=14){ ctx.moveTo(px, r.y); ctx.lineTo(px, r.y+r.h); } }
+      ctx.stroke();
+      ctx.strokeStyle = "#5d4327"; ctx.lineWidth = 4; ctx.strokeRect(r.x+1, r.y+1, r.w-2, r.h-2);
+      continue;
+    }
+    if (r.tarmac){
+      ctx.fillStyle = "#333a42"; ctx.fillRect(r.x, r.y, r.w, r.h);
+      if (r.w > 1000){                                        // the runway gets markings
+        ctx.strokeStyle = "rgba(255,255,255,0.8)"; ctx.lineWidth = 5; ctx.setLineDash([34,26]);
+        ctx.beginPath(); ctx.moveTo(r.x+50, r.y+r.h/2); ctx.lineTo(r.x+r.w-50, r.y+r.h/2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle="rgba(255,255,255,0.85)"; for (let i=0;i<6;i++){ ctx.fillRect(r.x+14, r.y+r.h/2-42+i*15, 26, 7); ctx.fillRect(r.x+r.w-40, r.y+r.h/2-42+i*15, 26, 7); }
+      }
+      continue;
+    }
     ctx.fillStyle = "#3a4350"; ctx.fillRect(r.x, r.y, r.w, r.h);
     ctx.strokeStyle = "rgba(255,214,120,0.5)"; ctx.lineWidth = 3; ctx.setLineDash([16,16]); ctx.beginPath();
     if (r.w > r.h){ ctx.moveTo(r.x, r.y+r.h/2); ctx.lineTo(r.x+r.w, r.y+r.h/2); }
     else { ctx.moveTo(r.x+r.w/2, r.y); ctx.lineTo(r.x+r.w/2, r.y+r.h); }
     ctx.stroke(); ctx.setLineDash([]);
   }
-  // curved roads
+  // curved roads (bridges get railings)
   for (const c of roadCurves){
-    ctx.strokeStyle = "#3a4350"; ctx.lineWidth = c.w; ctx.lineCap = "round";
+    const midx=0.25*c.x0+0.5*c.cx+0.25*c.x1, midy=0.25*c.y0+0.5*c.cy+0.25*c.y1;
+    if (!vis(midx,midy, Math.abs(c.x1-c.x0)+Math.abs(c.y1-c.y0))) continue;
+    if (c.bridge){
+      ctx.strokeStyle = "#5d4327"; ctx.lineWidth = c.w+10; ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke();
+      ctx.strokeStyle = "#4a5058";
+    } else ctx.strokeStyle = "#3a4350";
+    ctx.lineWidth = c.w; ctx.lineCap = "round";
     ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke();
     ctx.strokeStyle = "rgba(255,214,120,0.5)"; ctx.lineWidth = 3; ctx.setLineDash([16,16]);
     ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = "butt";
@@ -2199,14 +2560,46 @@ function render(){
     ctx.fillStyle = "rgba(0,0,0,0.28)"; roundRect(ctx, b.x+3, b.y+4, b.w, b.h, 4); ctx.fill();
     ctx.fillStyle = b.color; roundRect(ctx, b.x, b.y, b.w, b.h, 4); ctx.fill();
     if (b.silo){ ctx.fillStyle="#caa15a"; ctx.beginPath(); ctx.arc(b.x+b.w/2,b.y+b.h/2,b.w/2,0,7); ctx.fill(); }
+    else if (b.lighthouse){
+      const cx=b.x+b.w/2, cy=b.y+b.h/2, rr=b.w/2;
+      ctx.fillStyle="#e8e4da"; ctx.beginPath(); ctx.arc(cx,cy,rr,0,7); ctx.fill();
+      ctx.strokeStyle="#c0392b"; ctx.lineWidth=6; ctx.beginPath(); ctx.arc(cx,cy,rr-6,0,7); ctx.stroke();
+      ctx.fillStyle="#ffe14d"; ctx.beginPath(); ctx.arc(cx,cy,7,0,7); ctx.fill();
+      const sweep = clock*0.9;                                  // slow light sweep
+      ctx.fillStyle="rgba(255,240,170,0.20)";
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,120,sweep-0.28,sweep+0.28); ctx.closePath(); ctx.fill();
+    }
+    else if (b.tower){
+      ctx.fillStyle="#8a93a5"; ctx.beginPath(); ctx.arc(b.x+b.w/2,b.y+b.h/2,b.w/2,0,7); ctx.fill();
+      ctx.fillStyle="#2ea3d8"; ctx.beginPath(); ctx.arc(b.x+b.w/2,b.y+b.h/2,b.w/4,0,7); ctx.fill();
+    }
+    else if (b.container){ ctx.strokeStyle="rgba(0,0,0,0.3)"; ctx.lineWidth=1.5; for (let lx=b.x+8; lx<b.x+b.w-4; lx+=10){ ctx.beginPath(); ctx.moveTo(lx,b.y+2); ctx.lineTo(lx,b.y+b.h-2); ctx.stroke(); } }
     else if (b.roof){ ctx.fillStyle = shade(b.color,0.14); roundRect(ctx, b.x+6,b.y+6,b.w-12,b.h-12,3); ctx.fill(); }
   }
 
-  // foliage
+  // foliage (palms, pines, cypress, cactus, oaks)
   for (const t of trees){
     if (!vis(t.x,t.y,t.r)) continue;
+    if (t.kind === "palm"){
+      ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.beginPath(); ctx.ellipse(t.x+3,t.y+4,t.r*1.1,t.r*0.5,0.4,0,7); ctx.fill();
+      ctx.strokeStyle = t.c; ctx.lineWidth = 3.5; ctx.lineCap="round";
+      for (let i=0;i<6;i++){ const a=i*Math.PI/3 + (t.x%7)*0.2;
+        ctx.beginPath(); ctx.moveTo(t.x,t.y); ctx.quadraticCurveTo(t.x+Math.cos(a)*t.r*0.7, t.y+Math.sin(a)*t.r*0.7 - 3, t.x+Math.cos(a)*t.r*1.25, t.y+Math.sin(a)*t.r*1.25 + 2); ctx.stroke(); }
+      ctx.lineCap="butt";
+      ctx.fillStyle = "#8a6b3f"; ctx.beginPath(); ctx.arc(t.x,t.y,3.4,0,7); ctx.fill();
+      continue;
+    }
+    if (t.kind === "cactus"){
+      ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.beginPath(); ctx.ellipse(t.x+2,t.y+3,t.r,t.r*0.6,0,0,7); ctx.fill();
+      ctx.fillStyle = t.c; ctx.beginPath(); ctx.arc(t.x,t.y,t.r*0.62,0,7); ctx.fill();
+      ctx.beginPath(); ctx.arc(t.x-t.r*0.7,t.y-t.r*0.25,t.r*0.36,0,7); ctx.fill();
+      ctx.beginPath(); ctx.arc(t.x+t.r*0.7,t.y+t.r*0.2,t.r*0.36,0,7); ctx.fill();
+      ctx.fillStyle = shade(t.c,0.2); ctx.beginPath(); ctx.arc(t.x-t.r*0.2,t.y-t.r*0.2,t.r*0.24,0,7); ctx.fill();
+      continue;
+    }
     ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.beginPath(); ctx.arc(t.x+2,t.y+3,t.r,0,7); ctx.fill();
     ctx.fillStyle = t.c; ctx.beginPath(); ctx.arc(t.x,t.y,t.r,0,7); ctx.fill();
+    if (t.kind === "pine" || t.kind === "cypress"){ ctx.fillStyle = shade(t.c,-0.18); ctx.beginPath(); ctx.arc(t.x,t.y,t.r*0.55,0,7); ctx.fill(); }
     ctx.fillStyle = shade(t.c,0.15); ctx.beginPath(); ctx.arc(t.x-t.r*0.3,t.y-t.r*0.3,t.r*0.42,0,7); ctx.fill();
   }
 
@@ -2311,6 +2704,28 @@ function render(){
   }
 
   drawMinimap();
+  // district name popup (GTA-style) just above the minimap
+  if (zoneBanner){
+    const T_IN=0.45, T_HOLD=2.6, T_OUT=0.9, tt=zoneBanner.t;
+    let a = tt<T_IN ? tt/T_IN : tt<T_IN+T_HOLD ? 1 : Math.max(0, 1-(tt-T_IN-T_HOLD)/T_OUT);
+    if (tt > T_IN+T_HOLD+T_OUT) zoneBanner = null;
+    else {
+      const bx = VW-14, by = VH - MM_H - 44;
+      ctx.save(); ctx.globalAlpha = a;
+      ctx.textAlign="right"; ctx.textBaseline="alphabetic";
+      ctx.font = "italic 700 30px Georgia, 'Times New Roman', serif";
+      ctx.strokeStyle="rgba(0,0,0,0.85)"; ctx.lineWidth=5; ctx.lineJoin="round";
+      ctx.strokeText(zoneBanner.name, bx, by);
+      ctx.fillStyle="#ffe08a"; ctx.fillText(zoneBanner.name, bx, by);
+      if (zoneBanner.sub){
+        ctx.font = "italic 600 14px Georgia, serif";
+        ctx.strokeStyle="rgba(0,0,0,0.8)"; ctx.lineWidth=3.5;
+        ctx.strokeText(zoneBanner.sub, bx, by+20);
+        ctx.fillStyle="#e6ecf2"; ctx.fillText(zoneBanner.sub, bx, by+20);
+      }
+      ctx.restore();
+    }
+  }
   const nearPark = self.onFoot && ((self.x-self.parkX)**2 + (self.y-self.parkY)**2 < PARK_R*PARK_R);
   if (self.refueling) prompt("⛽ Refueling…", "#52c46a");
   else if (self.charging) prompt("⚡ Charging…", "#4fd1c5");
@@ -2382,9 +2797,11 @@ const mmScale = MM_W/WORLD_W;
 function buildMinimap(){
   mmCanvas.width = MM_W; mmCanvas.height = MM_H;
   const m = mmCanvas.getContext("2d"), s = mmScale;
-  m.fillStyle="#2f6b3f"; m.fillRect(0,0,MM_W,MM_H);
-  m.fillStyle="#26303c"; m.fillRect((CITY.x0-40)*s,(CITY.y0-40)*s,((CITY.x1-CITY.x0)+80)*s,((CITY.y1-CITY.y0)+80)*s);
-  m.fillStyle="#2b6c8f"; m.beginPath(); m.arc(pond.x*s, pond.y*s, pond.r*s, 0, 7); m.fill();
+  for (let py=0; py<MM_H; py++) for (let px=0; px<MM_W; px++){
+    const [r,g,b] = terrainColor(px/s, py/s);
+    m.fillStyle = `rgb(${r|0},${g|0},${b|0})`; m.fillRect(px,py,1,1);
+  }
+  m.fillStyle="rgba(38,48,60,0.9)"; m.fillRect((CITY.x0-40)*s,(CITY.y0-40)*s,((CITY.x1-CITY.x0)+80)*s,((CITY.y1-CITY.y0)+80)*s);
   m.fillStyle="#4a5563"; for (const r of roads) m.fillRect(r.x*s, r.y*s, r.w*s, r.h*s);
   m.strokeStyle="#4a5563"; m.lineWidth=Math.max(1,72*s); for (const c of roadCurves){ m.beginPath(); m.moveTo(c.x0*s,c.y0*s); m.quadraticCurveTo(c.cx*s,c.cy*s,c.x1*s,c.y1*s); m.stroke(); }
 }
@@ -2420,7 +2837,7 @@ function drawStats(){
   const x0 = 16, w = 210;
   const hasFuelBar = self.maxFuel > 0 && !self.onFoot, hasBatBar = self.maxBattery > 0 && !self.onFoot, hasFoodBar = self.onFoot || self.maxFood > 0;
   const nBars = (hasFuelBar?1:0) + (hasBatBar?1:0) + (hasFoodBar?1:0);
-  const panelH = 74 + nBars*30;
+  const panelH = 100 + nBars*30;
   const y0 = VH - panelH;
   ctx.fillStyle="rgba(10,15,22,0.82)"; roundRect(ctx, x0-8, y0-8, w+16, panelH+2, 12); ctx.fill();
   // coins
@@ -2439,8 +2856,19 @@ function drawStats(){
   else if (self.sprintCd > 0){ ctx.fillStyle="#ff8b5b"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("SPRINT " + Math.ceil(self.sprintCd) + "s", x0+w, y0+40); ctx.textAlign="left"; }
   else if (self.evMode){ ctx.fillStyle="#4fd1c5"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("⚡ EV MODE", x0+w, y0+40); ctx.textAlign="left"; }
   else if (self.cruise){ ctx.fillStyle="#5ee0a0"; ctx.font="700 10px system-ui"; ctx.textAlign="right"; ctx.fillText("ECO · 25% less", x0+w, y0+40); ctx.textAlign="left"; }
+  // elevation (instrument cluster) + grade while climbing/descending
+  const elevFt = Math.round((self.elev || 0) * 3.281);
+  ctx.fillStyle="#9fb0c0"; ctx.font="600 11px system-ui"; ctx.fillText("ELEV", x0, y0+80);
+  ctx.font="700 18px system-ui"; const elevW = ctx.measureText(String(elevFt)).width;
+  ctx.fillStyle="#eef2f6"; ctx.fillText(elevFt, x0+2, y0+100);
+  ctx.fillStyle="#8496a6"; ctx.font="600 11px system-ui"; ctx.fillText("ft", x0+8+elevW, y0+100);
+  const gradePct = Math.round((self.grade || 0) / METERS_PER_PX * 100);
+  if (Math.abs(gradePct) >= 4 && Math.abs(self.speed) > 0.05){
+    ctx.fillStyle = gradePct > 0 ? "#ff8b5b" : "#5ee0a0"; ctx.font="700 12px system-ui"; ctx.textAlign="right";
+    ctx.fillText((gradePct > 0 ? "↗ " : "↘ ") + Math.abs(gradePct) + "%", x0+w, y0+98); ctx.textAlign="left";
+  }
   // energy bars
-  let by = y0 + 82;
+  let by = y0 + 108;
   if (hasFuelBar){ drawEnergyBar(x0, by, w, "FUEL", self.fuel, self.maxFuel, false); by += 30; }
   if (hasBatBar){ drawEnergyBar(x0, by, w, "BATTERY", self.battery, self.maxBattery, true); by += 30; }
   if (hasFoodBar){ drawFoodBar(x0, by, w, self.onFoot ? self.footFood : self.food, self.onFoot ? self.footMaxFood : self.maxFood); by += 30; }
