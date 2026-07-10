@@ -2030,16 +2030,22 @@ function beginGame(){
   playing = true; lobby.style.display = "none";
   document.getElementById("chat").style.display = "block";
   if (touchMode) document.getElementById("touchCtrls").style.display = "flex";
-  buildMinimap(); refreshPlayerList(); reveal(self.x, self.y);
+  window.__vgStage='pre-mm';
+  buildMinimap(); window.__vgStage='mm-done';
+  refreshPlayerList(); reveal(self.x, self.y); window.__vgStage='pre-raf';
   requestAnimationFrame(loop);
+  window.__vgStage='raf-scheduled';
 }
 let last = performance.now(), sendAcc = 0;
 window.__vgPerf = { u:0, r:0, n:0 };
 function loop(now){
+  window.__vgTick = (window.__vgTick||0)+1;
   const dt = Math.min((now-last)/1000, 0.05); last = now; clock += dt;
   const f = dt*60;
-  const t0=performance.now(); update(dt, f); processCoinRespawns();
-  const t1=performance.now(); render();
+  const t0=performance.now();
+  try { update(dt, f); processCoinRespawns(); } catch(e){ window.__vgErr='update: '+e.message; throw e; }
+  const t1=performance.now();
+  try { render(); } catch(e){ window.__vgErr='render: '+e.message; throw e; }
   const t2=performance.now();
   window.__vgPerf.u=+(t1-t0).toFixed(1); window.__vgPerf.r=+(t2-t1).toFixed(1); window.__vgPerf.n++;
   sendAcc += dt;
