@@ -1781,16 +1781,21 @@ function update(dt, f){
     r.ry = lerp(r.ry, r.y, Math.min(1, 0.22*f));
     r.rangle = lerpAngle(r.rangle, r.angle, Math.min(1, 0.22*f));
   }
-  // trailer follow
+  // trailer follow — articulated like a real trailer: the coupling stays locked on a hitch
+  // point at the van's rear, and the trailer pivots about it (heading eases toward the hitch).
   for (const tr of trailers){
     if (tr.towedBy){
       let tx,ty,ta,cfg;
       if (tr.towedBy===self.id){ tx=self.x; ty=self.y; ta=self.angle; cfg=self.config; }
       else { const r=remotes.get(tr.towedBy); if(!r) continue; tx=r.rx; ty=r.ry; ta=r.rangle; cfg=r.config; }
-      const back = vanLength(cfg)/2 + 12 + TRAILER_LEN/2;
-      tr.tx = lerp(tr.tx, tx - Math.cos(ta)*back, Math.min(1,0.35*f));
-      tr.ty = lerp(tr.ty, ty - Math.sin(ta)*back, Math.min(1,0.35*f));
-      tr.tangle = lerpAngle(tr.tangle, ta, Math.min(1,0.3*f));
+      const hitchDist = vanLength(cfg)/2 + 8;                    // coupling sits just behind the van
+      const hx = tx - Math.cos(ta)*hitchDist, hy = ty - Math.sin(ta)*hitchDist;
+      const arm = TRAILER_LEN/2 + 12;                            // rigid tongue: coupling → trailer centre
+      // classic articulated tow: the trailer heads toward the coupling and rides a rigid arm behind it,
+      // so it pivots about the hitch and lags through turns exactly like a real trailer.
+      tr.tangle = Math.atan2(hy - tr.ty, hx - tr.tx);
+      tr.tx = hx - Math.cos(tr.tangle)*arm;                      // coupling stays pinned to the hitch
+      tr.ty = hy - Math.sin(tr.tangle)*arm;
     } else { tr.tx = tr.x; tr.ty = tr.y; tr.tangle = tr.angle; }
   }
 
@@ -2004,12 +2009,7 @@ function drawWorldVan(x,y,angle,config,name,fuel,maxFuel,battery,maxBattery,isSe
 }
 
 function drawTrailer(tr){
-  const towed = !!tr.towedBy;
-  if (towed){
-    let tx,ty;
-    if (tr.towedBy===self.id){ tx=self.x; ty=self.y; } else { const r=remotes.get(tr.towedBy); if(r){ tx=r.rx; ty=r.ry; } }
-    if (tx!=null){ ctx.strokeStyle="#3a3f47"; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(tr.tx,tr.ty); ctx.lineTo(tx,ty); ctx.stroke(); }
-  }
+  // (the trailer's own tongue, drawn below in local space, reaches the van's hitch — that's the coupling)
   ctx.save(); ctx.translate(tr.tx, tr.ty); ctx.rotate(tr.tangle);
   const L=TRAILER_LEN, W=TRAILER_W;
   ctx.fillStyle="rgba(0,0,0,0.22)"; roundRect(ctx,-L/2+2,-W/2+3,L,W,5); ctx.fill();
