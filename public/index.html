@@ -61,6 +61,7 @@
   .toggle button { appearance: none; border: none; background: transparent; color: #c8d3de;
     padding: 10px 14px; font-size: 14px; cursor: pointer; font-weight: 600; }
   .toggle button.on { background: var(--accent); color: #10161f; }
+  .toggle.locked button:not(.on) { opacity: 0.35; pointer-events: none; }   /* moto is fuel-only */
 
   .roofslots { display: flex; flex-wrap: wrap; gap: 8px; }
   .roofslot { display: flex; align-items: center; gap: 6px; }
@@ -212,11 +213,11 @@
           <div class="swatches" id="swatches"></div></label>
         <label class="field"><span>Vehicle</span>
           <div class="toggle" id="lengthToggle">
-            <button data-v="short" class="on">Short</button><button data-v="long">Long</button><button data-v="bus">Bus</button></div></label>
+            <button data-v="short" class="on">Short</button><button data-v="long">Long</button><button data-v="bus">Bus</button><button data-v="moto">Moto</button></div></label>
         <label class="field"><span>Rear tires</span>
           <div class="toggle" id="tiresToggle">
             <button data-v="4x4" class="on">4×4</button><button data-v="dualy">Dualy</button></div></label>
-        <label class="field"><span>Pack in the back</span>
+        <label class="field"><span id="extraLabel">Pack in the back</span>
           <div class="toggle" id="extraToggle">
             <button data-v="spare" class="on">Spare tire</button><button data-v="fuel">Extra fuel</button></div></label>
         <label class="field"><span>Propulsion</span>
@@ -237,7 +238,7 @@
         </label>
       </div>
     </div>
-    <label class="field" style="margin-top:2px"><span>Roof accessories</span>
+    <label class="field" style="margin-top:2px" id="roofField"><span>Roof accessories</span>
       <div id="roofSlots" class="roofslots"></div></label>
     <button class="btn big" id="startBtn">Hit the road</button>
     <div class="padnote" id="padNote">🎮 <b>Bluetooth controller?</b> Pair it to your device, then press any button once it's in-game. <b>RT</b> gas · <b>LT</b> brake/reverse · <b>left stick / d-pad</b> steer · <b>A</b> horn · <b>X</b> hitch/drop (hold) · <b>Y</b> fuel/charge (hold) · <b>LB/RB</b> boost.</div>
@@ -568,9 +569,40 @@ function findPath(sx,sy,tx,ty){
 /* =====================================================================
    VAN DRAWING (shared by lobby preview + world). Van points toward +x.
    ===================================================================== */
-function vanLength(config){ const l = config && config.length; return l === "bus" ? 104 : l === "long" ? 78 : 54; }
+function vanLength(config){ const l = config && config.length; return l === "bus" ? 104 : l === "long" ? 78 : l === "moto" ? 44 : 54; }
+function isMoto(config){ return !!(config && config.length === "moto"); }
 function wheel(ctx,cx,cy,len,wid){ roundRect(ctx, cx-len/2, cy-wid/2, len, wid, 3); ctx.fill(); }
+function drawMoto(ctx, config){
+  const color=(config&&config.color)||"#e84b3c", dark=shade(color,-0.4), light=shade(color,0.18);
+  const L=44, W=13;
+  ctx.fillStyle="rgba(0,0,0,0.20)"; roundRect(ctx,-L/2+2,-W/2+3,L,W,6); ctx.fill();
+  // inline wheels
+  ctx.fillStyle="#141414";
+  wheel(ctx, L/2-8, 0, 16, 7);    // front
+  wheel(ctx, -L/2+8, 0, 18, 8);   // rear
+  // rear fuel-can attachment (the one allowed rear slot item)
+  if (config && config.extra === "fuel"){
+    ctx.fillStyle="#c0392b"; roundRect(ctx,-L/2-2,-6,10,12,2); ctx.fill();
+    ctx.fillStyle="#7d2519"; ctx.fillRect(-L/2+1,-8,4,3);
+  }
+  // frame spine
+  ctx.strokeStyle=dark; ctx.lineWidth=5; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(-L/2+8,0); ctx.lineTo(L/2-8,0); ctx.stroke(); ctx.lineCap="butt";
+  // seat (dark) + fuel tank (body colour)
+  ctx.fillStyle=dark; roundRect(ctx,-L/2+12,-W/2+2,13,W-4,4); ctx.fill();
+  ctx.fillStyle=color; ctx.strokeStyle=dark; ctx.lineWidth=1.5; roundRect(ctx,-4,-W/2+1,18,W-2,5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=light; roundRect(ctx,0,-W/2+3,10,W-6,3); ctx.fill();
+  // handlebars near the front
+  ctx.strokeStyle="#20262e"; ctx.lineWidth=3; ctx.lineCap="round";
+  ctx.beginPath(); ctx.moveTo(L/2-14,-W/2-3); ctx.lineTo(L/2-14,W/2+3); ctx.stroke(); ctx.lineCap="butt";
+  // rider (top-down: shoulders + helmet)
+  ctx.fillStyle="#2a2f36"; ctx.beginPath(); ctx.ellipse(-3,0,7,6,0,0,7); ctx.fill();
+  ctx.fillStyle="#59606a"; ctx.beginPath(); ctx.arc(3,0,4,0,7); ctx.fill();
+  // headlight
+  ctx.fillStyle="#fff4bf"; ctx.beginPath(); ctx.arc(L/2-3,0,2.6,0,7); ctx.fill();
+}
 function drawVan(ctx, config){
+  if (isMoto(config)){ drawMoto(ctx, config); return; }
   const L = vanLength(config), W = 30;
   const color = (config && config.color) || "#e84b3c";
   const dark  = shade(color,-0.4), light = shade(color,0.16);
@@ -613,6 +645,7 @@ function drawVan(ctx, config){
   }
 }
 function maxFuelFor(config){
+  if (isMoto(config)) return 25 + (config.extra === "fuel" ? 10 : 0);   // 25-unit tank + optional 10-unit rear can
   const prop = (config && config.propulsion) || "fuel";
   if (prop === "electric") return 0;                        // electric has no fuel tank
   let m = prop === "hybrid" ? 50 : 100;                     // hybrid comes with a 50-unit tank
@@ -620,13 +653,13 @@ function maxFuelFor(config){
   if (config && config.roof) for (const a of config.roof) if (a === "fuelcan") m += 40;   // each roof fuel can adds +40
   return m;
 }
-function maxBatteryFor(config){ const p = (config && config.propulsion) || "fuel"; return (p === "hybrid" || p === "electric") ? 10 : 0; }
+function maxBatteryFor(config){ if (isMoto(config)) return 0; const p = (config && config.propulsion) || "fuel"; return (p === "hybrid" || p === "electric") ? 10 : 0; }
 function solarPanelsFor(config){ let n = 0; if (config && config.roof) for (const a of config.roof) if (a === "solar") n++; return n; }
 // consumption multiplier by vehicle: short 1x, long 1.1x, bus 1.25x
 function fuelFactor(config){ const l = config && config.length; return l === "bus" ? 1.25 : l === "long" ? 1.1 : 1; }
 
 /* ---- roof accessory slots: short van 1, long van 2, bus 3 ---- */
-function roofSlots(config){ const l = config && config.length; return l === "bus" ? 3 : l === "long" ? 2 : 1; }
+function roofSlots(config){ const l = config && config.length; if (l === "moto") return 0; return l === "bus" ? 3 : l === "long" ? 2 : 1; }
 const ACCESSORIES = [
   { id:"none",     name:"Empty" },
   { id:"rack",     name:"Roof rack" },
@@ -709,10 +742,27 @@ swatchWrap.appendChild(customColor);
 function wireToggle(id, key){
   const grp = document.getElementById(id);
   grp.querySelectorAll("button").forEach(btn => {
-    btn.onclick = () => { grp.querySelectorAll("button").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); config[key] = btn.dataset.v; if (key==="length") syncRoofSlots(); drawPreview(); };
+    btn.onclick = () => { grp.querySelectorAll("button").forEach(b=>b.classList.remove("on")); btn.classList.add("on"); config[key] = btn.dataset.v; if (key==="length"){ applyVehicleUI(); syncRoofSlots(); } drawPreview(); };
   });
 }
+// motorcycle has no roof, is fuel-only, and its one rear slot only takes a +10 fuel can
+function applyVehicleUI(){
+  const moto = isMoto(config);
+  const roofField = document.getElementById("roofField");
+  if (roofField) roofField.style.display = moto ? "none" : "";
+  const propWrap = document.getElementById("propToggle");
+  if (moto){
+    config.propulsion = "fuel";
+    propWrap.querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === "fuel"));
+    propWrap.classList.add("locked");
+  } else propWrap.classList.remove("locked");
+  const exLabel = document.getElementById("extraLabel");
+  const exBtns = document.getElementById("extraToggle").querySelectorAll("button");
+  if (moto){ if (exLabel) exLabel.textContent = "Rear slot"; exBtns[0].textContent = "None"; exBtns[1].textContent = "Fuel can (+10)"; }
+  else { if (exLabel) exLabel.textContent = "Pack in the back"; exBtns[0].textContent = "Spare tire"; exBtns[1].textContent = "Extra fuel"; }
+}
 wireToggle("lengthToggle","length"); wireToggle("tiresToggle","rearTires"); wireToggle("extraToggle","extra"); wireToggle("propToggle","propulsion");
+applyVehicleUI();
 
 /* roof-accessory garage: one selector per slot; slot count follows the vehicle */
 function renderRoofSlots(){
@@ -742,7 +792,7 @@ function drawPreview(){
   pctx.setTransform(dpr,0,0,dpr,0,0);
   const w = pv.clientWidth, h = pv.clientHeight;
   pctx.clearRect(0,0,w,h);
-  const psc = vanLength(config) > 90 ? 1.55 : 2.1;   // shrink so the bus fits
+  const psc = vanLength(config) > 90 ? 1.55 : isMoto(config) ? 2.7 : 2.1;   // shrink the bus, enlarge the little moto
   pctx.save(); pctx.translate(w/2, h/2); pctx.rotate(-Math.PI/2); pctx.scale(psc, psc);
   drawVan(pctx, config); pctx.restore();
 }
@@ -1657,10 +1707,17 @@ function update(dt, f){
   const boosting = (s.boost || s.padBoost) && throttle > 0 && hasEnergy;     // double-tap-hold accelerator, or gamepad bumper
   s.boosting = boosting;
   // per-propulsion boost top speed (mph = speed*11): fuel boost is 4.6*1.25, hybrid +5mph, electric +20mph
-  const FBOOST = 4.6 * 1.25;
-  const boostTop = prop === "electric" ? FBOOST + 20/11 : prop === "hybrid" ? FBOOST + 5/11 : FBOOST;
-  const MAXSPD = boosting ? boostTop : 4.6;
-  const accel = hasEnergy ? (boosting ? MAXSPD*0.045 : 0.16) : 0;
+  const moto = isMoto(s.config);
+  let MAXSPD, accel;
+  if (moto){
+    MAXSPD = boosting ? 130/11 : 85/11;                       // motorcycle: 85 mph cruising, 130 mph in boost
+    accel = hasEnergy ? MAXSPD*0.045 : 0;                     // strong pickup so it reaches those speeds
+  } else {
+    const FBOOST = 4.6 * 1.25;
+    const boostTop = prop === "electric" ? FBOOST + 20/11 : prop === "hybrid" ? FBOOST + 5/11 : FBOOST;
+    MAXSPD = boosting ? boostTop : 4.6;
+    accel = hasEnergy ? (boosting ? MAXSPD*0.045 : 0.16) : 0;
+  }
   if (throttle > 0) s.speed += accel*throttle*f;
   else if (throttle < 0) s.speed += 0.12*throttle*f;
   s.speed *= Math.pow(0.965, f);
@@ -1677,11 +1734,16 @@ function update(dt, f){
   if (throttle > 0) s.throttleHold += dt; else s.throttleHold = 0;
   s.cruise = s.throttleHold > 1;
   if (throttle !== 0 && hasEnergy){
+    const baseBurn = (Math.abs(s.speed)*0.006*f + 0.004*f);         // an equivalent van's regular-mode burn at this speed
+    if (moto){
+      // motorcycle sips fuel: ¼ of the van's regular use cruising, ½ of it in boost
+      s.fuel = Math.max(0, s.fuel - baseBurn * (boosting ? 0.5 : 0.25));
+    } else {
     let mult = fuelFactor(s.config);
     const boostConsum = prop === "electric" ? 1.25*1.15 : prop === "hybrid" ? 1.25*1.10 : 1.25;   // boost efficiency
     if (boosting) mult *= boostConsum;
     else if (s.cruise) mult *= 0.75;
-    const stdBurn = (Math.abs(s.speed)*0.006*f + 0.004*f) * mult;   // an equivalent fuel vehicle's burn
+    const stdBurn = baseBurn * mult;   // an equivalent fuel vehicle's burn
     if (prop === "fuel"){
       s.fuel = Math.max(0, s.fuel - stdBurn);
     } else if (prop === "hybrid"){
@@ -1694,6 +1756,7 @@ function update(dt, f){
     } else { // electric
       s.battery = Math.max(0, s.battery - (stdBurn*0.5)/20);        // same drain rate as a hybrid
     }
+    }   // end non-moto branch
   }
   // ---- solar charging: 1 energy per in-game daylight hour per panel (hybrid/electric) ----
   s.solarCharging = false;
