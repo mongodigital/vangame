@@ -1130,7 +1130,7 @@ function resize(){
 window.addEventListener("resize", resize); resize();
 
 let self = null;                       // my van
-// read-only debug bridge for QA (module scope is otherwise unreachable)
+// read-only debug bridge for QA (module scope is otherwise unreachable) — v2
 window.__vg = { probe(){ if (!self) return null;
   return { pos:[Math.round(self.x),Math.round(self.y)], mph:+(Math.abs(self.speed)*11).toFixed(1),
     wp:self.waypoints?self.waypoints.length:-1, angle:+(self.angle||0).toFixed(2),
