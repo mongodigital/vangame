@@ -1435,6 +1435,7 @@ chatInput.addEventListener("keydown", e => {
   if (low==="/swap"){ startSwap(); return; }
   if (low==="/teleport" || low==="/tp"){ startTeleport(); return; }
   if (low==="/controls" || low==="/keys"){ showControls(); return; }
+  if (low==="/cord" || low==="/coords" || low==="/cords"){ showCoords = !showCoords; addSysLine("Coordinate grid <b>"+(showCoords?"on":"off")+"</b> — your van reads out its (x, y)."); return; }
   if (low==="/info" || low==="/help" || low==="/commands"){ showCommandInfo(); return; }
   if (t[0]==="/"){ addSysLine("Unknown command. Type <b>/info</b> to see what's available."); return; }
   addChatLine(self.name, self.config.color, t); net.sendChat(t);   // normal chat
@@ -1486,6 +1487,7 @@ function showCommandInfo(){
   addSysLine("&nbsp;&nbsp;<b>/teleport</b> — jump to another player");
   addSysLine("&nbsp;&nbsp;<b>/roomcode</b> — show this room's code + join link");
   addSysLine("&nbsp;&nbsp;<b>/controls</b> — show the game controls");
+  addSysLine("&nbsp;&nbsp;<b>/cord</b> — toggle a coordinate grid overlay");
   addSysLine("&nbsp;&nbsp;<b>/info</b> — show this list &nbsp;·&nbsp; <b>/cancel</b> — stop a command in progress");
 }
 function showControls(){
@@ -2514,6 +2516,7 @@ function renderChunk(cx,cy){
   return cv;
 }
 let zoneBanner = null;   // { name, sub, t } — district name popup by the minimap
+let showCoords = false;  // /cord — draws a world-coordinate grid + a live (x,y) readout on your van
 
 /* =====================================================================
    RENDER
@@ -2592,6 +2595,28 @@ function render(){
   if (vis(TP.x, TP.y, 60)){
     ctx.fillStyle="#cdd6e0"; ctx.font="700 22px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
     ctx.fillText("TP", TP.x, TP.y);
+  }
+
+  // coordinate grid overlay (/cord) — world-aligned lines + labels, and a live readout on your van
+  if (showCoords){
+    const step = 500;
+    const gx0 = Math.max(0, Math.floor(vL/step)*step), gx1 = Math.min(WORLD_W, Math.ceil(vR/step)*step);
+    const gy0 = Math.max(0, Math.floor(vT/step)*step), gy1 = Math.min(WORLD_H, Math.ceil(vB/step)*step);
+    ctx.lineWidth = 1;
+    for (let x=gx0; x<=gx1; x+=step){ ctx.strokeStyle = x%1000===0 ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.13)";
+      ctx.beginPath(); ctx.moveTo(x, Math.max(0,vT)); ctx.lineTo(x, Math.min(WORLD_H,vB)); ctx.stroke(); }
+    for (let y=gy0; y<=gy1; y+=step){ ctx.strokeStyle = y%1000===0 ? "rgba(255,255,255,0.30)" : "rgba(255,255,255,0.13)";
+      ctx.beginPath(); ctx.moveTo(Math.max(0,vL), y); ctx.lineTo(Math.min(WORLD_W,vR), y); ctx.stroke(); }
+    ctx.textAlign="left"; ctx.textBaseline="top"; ctx.font="600 12px system-ui";
+    for (let x=gx0; x<=gx1; x+=1000) for (let y=gy0; y<=gy1; y+=1000){
+      const lbl = x+","+y; ctx.fillStyle="rgba(0,0,0,0.55)"; ctx.fillRect(x+3, y+3, ctx.measureText(lbl).width+8, 16);
+      ctx.fillStyle="rgba(255,255,255,0.92)"; ctx.fillText(lbl, x+7, y+5);
+    }
+    // live readout pinned to the van
+    ctx.fillStyle="#ffd23f"; ctx.beginPath(); ctx.arc(self.x, self.y, 4, 0, 7); ctx.fill();
+    const me = Math.round(self.x)+", "+Math.round(self.y);
+    ctx.font="700 13px system-ui"; ctx.fillStyle="rgba(0,0,0,0.72)"; ctx.fillRect(self.x+10, self.y-24, ctx.measureText(me).width+12, 19);
+    ctx.fillStyle="#ffe08a"; ctx.textBaseline="middle"; ctx.fillText(me, self.x+16, self.y-14);
   }
 
   // delivery drop-zones
