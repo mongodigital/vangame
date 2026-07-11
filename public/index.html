@@ -335,47 +335,31 @@ function fbm(x,y,oct=3){ let v=0,amp=0.5,f=1; for(let o=0;o<oct;o++){ v+=amp*noi
 function sstep(t,a,b){ const u=clamp((t-a)/(b-a),0,1); return u*u*(3-2*u); }
 function gauss(x,y,cx,cy,sx,sy){ const dx=(x-cx)/sx, dy=(y-cy)/sy; return Math.exp(-(dx*dx+dy*dy)*0.5); }
 
-/* ---- authored island features ---- */
-const ISLE = { cx:6400, cy:4150, rx:5600, ry:3350 };
-const KEYS = [                                   // SW island chain ("the keys")
-  { x:2950, y:7250, r:330, h:8  },
-  { x:2000, y:7500, r:280, h:6  },
-  { x:1050, y:7700, r:360, h:10 },
+/* ---- authored islands (FLAT world — no hills or mountains, just coastlines) ----
+   Positions trace the hand-drawn map: a long NW island, a SW island with a pond,
+   a small south island, the big central island (city + lake + airstrip), and a
+   thin east sliver. Everything else is ocean. Lakes carve water back into land. */
+const ISLANDS = [
+  { cx:2450,  cy:2050, rx:520,  ry:1450, seed:2 },   // NW long island (beach/camp/mart)
+  { cx:2200,  cy:5000, rx:820,  ry:1050, seed:5 },   // SW island (holds a pond)
+  { cx:4550,  cy:6550, rx:600,  ry:600,  seed:8 },   // small south island (camp)
+  { cx:7300,  cy:3450, rx:2550, ry:2750, seed:1 },   // central big island
+  { cx:10650, cy:4350, rx:320,  ry:1500, seed:9 },   // east sliver
 ];
-const FLATS = [                                  // terrain flattened to pads
-  { x0:3560, y0:5400, x1:7060, y1:6960, h:5,  feather:680 },   // Vice Bay city
-  { x0:1650, y0:5950, x1:3350, y1:7150, h:6,  feather:380 },   // Sunhaven airport
-  { x0:5250, y0:7280, x1:6950, y1:7800, h:4,  feather:300 },   // Port Salado
-  { x0:9750, y0:1850, x1:10950, y1:2750, h:38, feather:420 },  // Dusthaven (desert town)
-  { x0:6350, y0:800,  x1:7350, y1:1300, h:7,  feather:340 },   // Northpoint village
-  { x0:7700, y0:6350, x1:10150, y1:7050, h:5,  feather:360 },  // Neon Mile beach strip
+const LAKES = [
+  { cx:7050, cy:2450, rx:520, ry:980, seed:3 },      // central lake
+  { cx:2200, cy:4620, rx:300, ry:340, seed:7 },      // SW island pond
 ];
+function blobBase(x,y,b){                            // 0 = ocean … 1 = deep inland
+  const nx=(x-b.cx)/b.rx, ny=(y-b.cy)/b.ry, ang=Math.atan2(ny,nx);
+  const wob = 0.82 + 0.22*fbm(Math.cos(ang)*2+b.seed*3, Math.sin(ang)*2+b.seed, 3);
+  return sstep(Math.hypot(nx,ny)/Math.max(0.35,wob), 1.04, 0.84);
+}
 function terrainHeight(x,y){
-  const nx=(x-ISLE.cx)/ISLE.rx, ny=(y-ISLE.cy)/ISLE.ry;
-  const ang=Math.atan2(ny,nx);
-  const wob = 0.80 + 0.26*fbm(Math.cos(ang)*2+7, Math.sin(ang)*2+3, 3) + 0.10*fbm(x*0.0009+40, y*0.0009+9, 2);
-  const d = Math.hypot(nx,ny)/Math.max(0.35,wob);
-  const base = sstep(d, 1.05, 0.86);                               // 0 ocean → 1 inland
-  let h = -34 + base*(44 + 24*fbm(x*0.00055+11, y*0.00055+5, 3));  // ocean −34m → rolling inland
-  for (const k of KEYS) h = Math.max(h, -34 + sstep(Math.hypot(x-k.x,y-k.y), k.r*1.6, k.r*0.5)*(42+k.h));
-  // mountains & hills (meters)
-  h += 340*gauss(x,y,4900,1750,1250,850);        // Mount Solano main mass
-  h += 95*gauss(x,y,4950,1780,280,240);          // steep summit cone (cliffy)
-  h += 170*gauss(x,y,6350,2150,950,700);         // east shoulder ridge
-  h += 120*gauss(x,y,3350,2500,900,750);         // west ridge over the forest
-  h += 70*gauss(x,y,6100,4300,1500,1000);        // central foothills
-  h += 45*gauss(x,y,4250,4900,650,520);          // Vista Heights (city overlook)
-  h += 55*gauss(x,y,11250,4150,320,260);         // Lighthouse Point sea cliff
-  // carves (below sea level = water)
-  h -= 70*gauss(x,y,8050,3350,1150,760);         // Palmetto Bay (central lake)
-  h -= 14*gauss(x,y,2450,6150,520,330);          // Gator Marsh pools
-  h -= 11*gauss(x,y,2050,5900,260,200);
-  h -= 12*gauss(x,y,2800,6350,240,170);
-  for (const fz of FLATS){                       // settle the pads
-    const ddx=Math.max(fz.x0-x,0,x-fz.x1), ddy=Math.max(fz.y0-y,0,y-fz.y1);
-    const m = 1 - sstep(Math.hypot(ddx,ddy), fz.feather*0.1, fz.feather);
-    h = h*(1-m) + fz.h*m;
-  }
+  let base = 0;
+  for (const isl of ISLANDS) base = Math.max(base, blobBase(x,y,isl));
+  let h = -34 + base*46;                             // ocean −34 → flat grass ~+12 (sand band between)
+  for (const lk of LAKES){ const lb = blobBase(x,y,lk); if (lb>0) h = h*(1-lb) + (-22)*lb; }   // carve lakes
   return h;
 }
 
@@ -390,121 +374,79 @@ function elevAt(x,y){
   return a+(b-a)*tx+(c-a)*ty+(a-b-c+dd)*tx*ty;
 }
 function waterAt(x,y){ return elevAt(x,y) < 0; }
-function slopeMagAt(x,y){                        // m per world px
-  const e=24;
-  return Math.hypot(elevAt(x+e,y)-elevAt(x-e,y), elevAt(x,y+e)-elevAt(x,y-e))/(2*e);
-}
-function gradeAlong(x,y,angle){                  // m/px along heading (+ = uphill ahead)
-  const e=40, cx=Math.cos(angle)*e, cy=Math.sin(angle)*e;
-  return (elevAt(x+cx,y+cy)-elevAt(x-cx,y-cy))/(2*e);
-}
-const CLIFF_SLOPE = 0.27;                        // steeper than this off-road = wall
-function cliffAt(x,y){ return slopeMagAt(x,y) > CLIFF_SLOPE; }
+function slopeMagAt(x,y){ return 0; }            // FLAT world — no elevation anywhere
+function gradeAlong(x,y,angle){ return 0; }      // no uphill/downhill pull
+const CLIFF_SLOPE = 999;
+function cliffAt(x,y){ return false; }           // no cliffs to block driving
 
-// City occupies a sub-rectangle; the rest is countryside.
-// (x1/y1 sit exactly on the outermost grid roads so the grid has no dangling strips)
-const CITY = { x0: 3600, y0: 5450, x1: 6988, y1: 6860 };
+// CITY is the little street grid on the central island (lower-middle, per the drawing).
+const CITY = { x0: 6650, y0: 3980, x1: 7950, y1: 4760 };
 
-// --- roads (visual + drivable; only buildings/water/cliffs/edges collide) ---
-const roads = [];        // straight rects  ({hwy,pier,tarmac} flags style them)
-const roadCurves = [];   // {x0,y0,cx,cy,x1,y1,w,bridge}
-const stepX = 484, stepY = 470, roadW = 76;
+// --- roads (drivable). paved = solid, bridge = over water, dirt = dashed trail ---
+const roads = [];        // straight rects  ({pier,tarmac} flags style them)
+const roadCurves = [];   // {x0,y0,cx,cy,x1,y1,w,bridge}   paved (bridge crosses water)
+const dirtPaths = [];    // {x0,y0,cx,cy,x1,y1,w}          dashed dirt trails
+// central-island street grid
+const stepX = 260, stepY = 260, roadW = 60;
 const vxs = [], hys = [];
 for (let x = CITY.x0; x <= CITY.x1 + 1; x += stepX) vxs.push(Math.round(x));
 for (let y = CITY.y0; y <= CITY.y1 + 1; y += stepY) hys.push(Math.round(y));
 vxs.forEach(x => roads.push({ x: x - roadW/2, y: CITY.y0 - roadW, w: roadW, h: (CITY.y1 - CITY.y0) + 2*roadW }));
 hys.forEach(y => roads.push({ x: CITY.x0 - roadW, y: y - roadW/2, w: (CITY.x1 - CITY.x0) + 2*roadW, h: roadW }));
 
-// ---- island ring highway ----
-// An OPEN smoothed polyline whose two ends land exactly on the city's main
-// drag (the y=6860 grid road): the highway feeds into the street grid on the
-// city's west side, and picks up again on its east side — no dangling ends,
-// and no diagonal slicing through city blocks.
-(() => {
-  const P = [
-    {x:3600, y:6860},                                       // WEST junction: city main drag
-    {x:2500, y:6650},{x:1500, y:5450},{x:1350, y:3900},     // marsh + west coast
-    {x:2100, y:2450},{x:3400, y:1350},{x:5100, y:800},      // forest + north coast
-    {x:6850, y:1050},{x:8600, y:1500},{x:10050, y:2250},    // Northpoint + NE coast
-    {x:10900, y:3500},{x:10950, y:4900},{x:10450, y:5950},  // east coast
-    {x:9600, y:6650},{x:8500, y:6800},                      // Neon Mile beach strip
-    {x:6988, y:6860},                                       // EAST junction: city main drag
-  ];
-  const mid=(a,b)=>({x:(a.x+b.x)/2, y:(a.y+b.y)/2});
-  const N=P.length-1;
-  roadCurves.push({ x0:P[0].x, y0:P[0].y, cx:P[1].x, cy:P[1].y, x1:mid(P[1],P[2]).x, y1:mid(P[1],P[2]).y, w:78, hwy:true });
-  for (let i=2;i<=N-2;i++){
-    const a=mid(P[i-1],P[i]), b=mid(P[i],P[i+1]);
-    roadCurves.push({ x0:a.x, y0:a.y, cx:P[i].x, cy:P[i].y, x1:b.x, y1:b.y, w:78, hwy:true });
-  }
-  const a=mid(P[N-2],P[N-1]);
-  roadCurves.push({ x0:a.x, y0:a.y, cx:P[N-1].x, cy:P[N-1].y, x1:P[N].x, y1:P[N].y, w:78, hwy:true });
-})();
-// cross-island highway: leaves the city grid at the top of a vertical avenue
-// (x=6504), climbs the foothills, and ends merging into the ring at Dusthaven.
-roadCurves.push({ x0:6504, y0:5450, cx:6600, cy:4600, x1:7100, y1:4150, w:74 });
-roadCurves.push({ x0:7100, y0:4150, cx:7800, cy:3650, x1:8900, y1:3050, w:74 });
-roadCurves.push({ x0:8900, y0:3050, cx:9700, cy:2650, x1:10350, y1:2300, w:74 });
-// mountain access road: branches off the cross-island highway at the foothills
-// junction (7100,4150) and runs to the base of the switchbacks.
-roadCurves.push({ x0:7100, y0:4150, cx:6300, cy:3900, x1:5600, y1:2950, w:66 });
-// mountain switchbacks up to the Solano overlook (the top is a scenic dead end)
-roadCurves.push({ x0:5600, y0:2950, cx:6100, cy:2500, x1:5500, y1:2300, w:64 });
-roadCurves.push({ x0:5500, y0:2300, cx:4900, cy:2150, x1:5350, y1:1950, w:64 });
-roadCurves.push({ x0:5350, y0:1950, cx:5750, cy:1800, x1:5250, y1:1680, w:64 });
-roadCurves.push({ x0:5250, y0:1680, cx:4800, cy:1560, x1:5000, y1:1900, w:60 });
-// causeway to the keys: branches off the ring on the marsh coast (a point on
-// the ring's first segment), then island-hops on bridges to Key Sur.
-roadCurves.push({ x0:3087, y0:6730, cx:3010, cy:7000, x1:2950, y1:7280, w:66, bridge:true });
-roadCurves.push({ x0:2950, y0:7280, cx:2450, cy:7420, x1:2000, y1:7520, w:66, bridge:true });
-roadCurves.push({ x0:2000, y0:7520, cx:1500, cy:7650, x1:1080, y1:7700, w:66, bridge:true });
-// airport access: leaves the city main drag and reaches the apron from the SOUTH
-// (kept clear of the runway strip, which sits to the north at y≈6300–6530)
-roadCurves.push({ x0:3600, y0:6860, cx:3040, cy:6850, x1:2520, y1:6720, w:70 });
-// lighthouse spur: from the east-coast ring out to the sea cliff (dead end at the light)
-roadCurves.push({ x0:10925, y0:4200, cx:11080, cy:4180, x1:11180, y1:4150, w:56 });
-// port road: straight down from the city main drag into Port Salado
-roads.push({ x:6100-35, y:6860, w:70, h:750 });
-// desert town streets (join the cross-island highway's end at Dusthaven)
-roads.push({ x:9850, y:2260-32, w:1000, h:64 });
-roads.push({ x:10300-32, y:1900, w:64, h:800 });
-// airport apron + runway (drivable tarmac) — apron taxiway meets the runway and runs south to the access road
-roads.push({ x:1750, y:6300, w:1500, h:250, tarmac:true });
-roads.push({ x:2350, y:6530, w:300, h:340, tarmac:true });
-// piers (wooden, drivable, reach into the sea)
-roads.push({ x:9150-30, y:7000, w:60, h:560, pier:true });     // Neon Mile boardwalk pier
-roads.push({ x:6830-26, y:640, w:52, h:430, pier:true });      // Northpoint fishing pier
-roads.push({ x:5700-30, y:7780, w:60, h:330, pier:true });     // Port Salado dock A
-roads.push({ x:6350-30, y:7780, w:60, h:330, pier:true });     // Port Salado dock B
+// ---- NW island: a spine road, plus a bridge east to the central island and one south to the SW island ----
+roadCurves.push({ x0:2900, y0:1900, cx:2560, cy:1880, x1:2480, y1:2500, w:58 });               // spine past the mart
+roadCurves.push({ x0:2480, y0:2500, cx:2440, cy:2960, x1:2520, y1:3360, w:58 });               // spine down to south bridge
+roadCurves.push({ x0:2900, y0:1900, cx:4100, cy:2160, x1:5520, y1:2620, w:60, bridge:true });  // BRIDGE  NW → central
+roadCurves.push({ x0:2520, y0:3360, cx:2330, cy:3730, x1:2250, y1:4090, w:56, bridge:true });  // BRIDGE  NW → SW island
 
-// ---- service stations: each sits on its OWN frontage road, entered by an off-ramp and
-//      left by an on-ramp — never on the main road itself ----
+// ---- central island: main spine from the west-bridge landing, past the mart, into the city grid ----
+roadCurves.push({ x0:5520, y0:2620, cx:5900, cy:3240, x1:6500, y1:3660, w:64 });               // west landing → south of the lake
+roadCurves.push({ x0:6500, y0:3660, cx:7020, cy:3720, x1:7300, y1:3980, w:64 });               // past the mart → city grid
+roadCurves.push({ x0:7300, y0:4760, cx:7520, cy:5060, x1:7940, y1:5240, w:60 });               // grid → south mart
+roadCurves.push({ x0:7950, y0:4370, cx:8300, cy:4440, x1:8560, y1:4560, w:56 });               // grid → airstrip
+
+// ---- SW island: the bridge road forks around the pond ----
+roadCurves.push({ x0:2250, y0:4090, cx:2000, cy:4420, x1:1970, y1:4760, w:54 });               // west fork
+roadCurves.push({ x0:2250, y0:4090, cx:2500, cy:4420, x1:2480, y1:4800, w:54 });               // east fork
+
+// ---- dirt paths (dashed trails) ----
+dirtPaths.push({ x0:2480, y0:1500, cx:2560, cy:1780, x1:2470, y1:2180, w:26 });                // NW island camp trail
+dirtPaths.push({ x0:6350, y0:2650, cx:6480, cy:1650, x1:7050, y1:1330, w:26 });                // lakeshore loop (west + north)
+dirtPaths.push({ x0:7050, y0:1330, cx:7720, cy:1750, x1:7660, y1:2760, w:26 });                // lakeshore loop (north + east)
+dirtPaths.push({ x0:5920, y0:2860, cx:6020, cy:3480, x1:5950, y1:4150, w:26 });                // west-peninsula trail (to TP/beach)
+dirtPaths.push({ x0:1970, y0:4760, cx:2080, cy:5240, x1:2380, y1:5680, w:24 });                // SW island south trail
+
+// ---- piers (wooden, drivable, reach into water) ----
+roads.push({ x:7074, y:2950, w:54, h:640, pier:true });        // central LAKE pier
+roads.push({ x:4950, y:3080, w:330, h:52, pier:true });        // central west-coast pier
+roads.push({ x:9150, y:4280, w:330, h:52, pier:true });        // central east-coast pier
+roads.push({ x:4524, y:6980, w:52, h:300, pier:true });        // south-island pier
+
+// ---- airstrip (A): tarmac runway on the central island, SE of the grid ----
+roads.push({ x:7650, y:4520, w:1040, h:150, tarmac:true });
+
+// ---- marts (M): fuel + charge + a little store, built beside the road ----
 const SERVICE = [];
 const STATION_R = 74, CHARGER_R = 74, LOT_HW = 150;
-function addServiceH(mx, roadY, side){   // horizontal main road at y=roadY; lot on `side` (+1 south / -1 north), pads side-by-side
-  const D = 158, FH = 150, ly = roadY + side*D;
-  roads.push({ x: mx-FH, y: ly-38, w: FH*2, h: 76 });                                              // frontage road (pads sit on it)
-  roadCurves.push({ x0: mx-FH-90, y0: roadY, cx: mx-FH-14, cy: ly, x1: mx-FH+24, y1: ly, w: 58 }); // off-ramp in
-  roadCurves.push({ x0: mx+FH-24, y0: ly, cx: mx+FH+14, cy: ly, x1: mx+FH+90, y1: roadY, w: 58 }); // on-ramp out
-  const martY = ly + side*98;
-  SERVICE.push({ lx:mx, ly, orient:'h', fuel:{ x:mx-74, y:ly }, charge:{ x:mx+74, y:ly }, mart:{ x:mx-58, y:martY-32, w:116, h:64 } });
+function addMart(x, y, orient){
+  if (orient === 'v') SERVICE.push({ lx:x, ly:y, orient:'v', fuel:{ x, y:y-74 }, charge:{ x, y:y+74 }, mart:{ x:x+34, y:y-58, w:64, h:116 } });
+  else                SERVICE.push({ lx:x, ly:y, orient:'h', fuel:{ x:x-74, y }, charge:{ x:x+74, y }, mart:{ x:x-58, y:y-150, w:116, h:64 } });
 }
-function addServiceV(my, roadX, side){   // vertical main road at x=roadX; lot on `side` (+1 east / -1 west), pads stacked
-  const D = 158, FH = 150, lx = roadX + side*D;
-  roads.push({ x: lx-38, y: my-FH, w: 76, h: FH*2 });                                              // frontage road (pads sit on it)
-  roadCurves.push({ x0: roadX, y0: my-FH-90, cx: lx, cy: my-FH-14, x1: lx, y1: my-FH+24, w: 58 }); // off-ramp in
-  roadCurves.push({ x0: lx, y0: my+FH-24, cx: lx, cy: my+FH+14, x1: roadX, y1: my+FH+90, w: 58 }); // on-ramp out
-  const martX = lx + side*98;
-  SERVICE.push({ lx, ly:my, orient:'v', fuel:{ x:lx, y:my-74 }, charge:{ x:lx, y:my+74 }, mart:{ x:martX-32, y:my-58, w:64, h:116 } });
-}
-// spread around the island so there's a fill-up option whichever way you head
-addServiceH(4568,  5450, -1);   // NORTH of downtown
-addServiceH(5600,  6860, +1);   // SOUTH of downtown (toward the port)
-addServiceV(6150,  3600, -1);   // WEST of downtown
-addServiceV(6150,  6988, +1);   // EAST of downtown
-addServiceH(10600, 2260, +1);   // Dusthaven desert strip (clear of the cross-street)
+addMart(2560, 1800, 'h');   // NW island mart
+addMart(7000, 3720, 'h');   // central island — main mart (south of the lake)
+addMart(7900, 5240, 'h');   // central island — south mart
 const stations = SERVICE.map(s => s.fuel);    // fuel pads
 const chargers = SERVICE.map(s => s.charge);  // charge pads
+
+// ---- campgrounds (C): a gravel lot with camper parking stalls ----
+const CAMPS = [
+  { x:2360, y:1420, w:230, h:150 },   // NW island camp
+  { x:6000, y:2360, w:230, h:150 },   // central island — west lakeshore camp
+  { x:4360, y:6440, w:230, h:150 },   // south island camp
+];
+// ---- 'TP' — a small paved pull-off on the west peninsula (purpose TBD) ----
+const TP = { x:5900, y:4250 };
 
 function overlapsStraightRoad(x, y, w, h, m=14){
   for (const r of roads){
@@ -526,7 +468,7 @@ const RG = new Uint8Array(ECOLS*EROWS);
     if (r.w>=r.h){ for (let x=r.x; x<=r.x+r.w; x+=EG/2) mark(x, r.y+r.h/2, r.h); }
     else { for (let y=r.y; y<=r.y+r.h; y+=EG/2) mark(r.x+r.w/2, y, r.w); }
   }
-  for (const c of roadCurves){
+  for (const c of roadCurves.concat(dirtPaths)){
     for (let t=0;t<=1.0001;t+=0.02){
       const u=1-t, x=u*u*c.x0+2*u*t*c.cx+t*t*c.x1, y=u*u*c.y0+2*u*t*c.cy+t*t*c.y1;
       mark(x,y,c.w);
@@ -566,33 +508,13 @@ for (let i=0;i<vxs.length-1;i++) for (let j=0;j<hys.length-1;j++){
   fillBlock(vxs[i]+roadW/2+8, hys[j]+roadW/2+8, vxs[i+1]-roadW/2-8, hys[j+1]-roadW/2-8);
 }
 // --- POI structures (also collide) ---
-// Sunhaven International: terminal, tower, hangars
-buildings.push({ x:2050, y:6650, w:340, h:110, color:"#5f6b7c", roof:true, terminal:true });
-buildings.push({ x:2450, y:6680, w:52,  h:52,  color:"#8a93a5", tower:true });
-buildings.push({ x:1800, y:6640, w:130, h:100, color:"#77808f", roof:true, hangar:true });
-buildings.push({ x:2900, y:6640, w:130, h:100, color:"#77808f", roof:true, hangar:true });
-// Port Salado: depot warehouse + container stacks
-buildings.push({ x:5350, y:7380, w:170, h:120, color:"#41525f", warehouse:true, roof:true });
-(() => { const cc=["#b3502e","#2e6fb3","#3d8f5f","#b3962e","#7a4d9e"];
-  for (let i=0;i<11;i++){ const col=cc[(rng()*cc.length)|0];
-    buildings.push({ x:6480+ (i%4)*105, y:7370 + Math.floor(i/4)*80, w:88, h:34, color:col, container:true });
-  }})();
-// Dusthaven shacks (desert town)
-(() => { const dc=["#a8794a","#9c6f45","#b08753","#8f6a40"];
-  const spots=[[9950,2050],[10120,2340],[10480,2060],[10650,2330],[10420,2480],[9900,2420],[10750,2100],[10200,1960]];
-  for (const [sx,sy] of spots) buildings.push({ x:sx, y:sy, w:80+rng()*50, h:60+rng()*36, color:dc[(rng()*dc.length)|0], roof:rng()<0.5 });
-})();
-// Northpoint cottages
-(() => { const spots=[[6500,900],[6650,1120],[7000,900],[7150,1100],[6850,1180]];
-  for (const [sx,sy] of spots) buildings.push({ x:sx, y:sy, w:74+rng()*30, h:58+rng()*24, color:"#7d8ba0", roof:true });
-})();
-// Solano Foothills farm
-buildings.push({ x:6050, y:4550, w:150, h:110, color:"#9c3b30", roof:true, barn:true });
-buildings.push({ x:6230, y:4555, w:56,  h:56,  color:"#b8863f", silo:true });
-// Lighthouse Point
-buildings.push({ x:11220, y:4120, w:60, h:60, color:"#e8e4da", lighthouse:true });
-// Key Sur beach bar
-buildings.push({ x:1000, y:7640, w:110, h:70, color:"#c98a4a", roof:true, barn:true });
+// airstrip hangar + a small terminal shed beside the runway
+buildings.push({ x:7660, y:4360, w:130, h:100, color:"#77808f", roof:true, hangar:true });
+buildings.push({ x:7820, y:4380, w:60, h:56, color:"#8a93a5", tower:true });
+// each campground gets a little restroom / camp-store hut
+for (const c of CAMPS) buildings.push({ x:c.x+c.w-46, y:c.y-40, w:46, h:36, color:"#9a7d55", roof:true, barn:true });
+// a lighthouse out on the east sliver
+buildings.push({ x:10620, y:3900, w:60, h:60, color:"#e8e4da", lighthouse:true });
 
 // no building may sit on a road: sweep everything (city blocks + POIs) against
 // every curve's swept path and every straight road rect
@@ -609,27 +531,18 @@ buildings.push({ x:1000, y:7640, w:110, h:70, color:"#c98a4a", roof:true, barn:t
 })();
 
 // keep stations, chargers, spawn, and depot clear of buildings
-const SPAWN = { x: 3700, y: 6860 };
-const DEPOT = { x: 5620, y: 7520 };
+const SPAWN = { x: 7000, y: 3900 };
+const DEPOT = { x: 7300, y: 4370 };
 
 /* ---- named districts (banner pops by the minimap when you cross into one) ---- */
 const ZONES = [
-  { name:"Mount Solano",        x:4900,  y:1750, r:1350, sub:"the summit road is steep" },
-  { name:"Dusthaven",           x:10350, y:2300, r:800,  sub:"desert flats" },
-  { name:"Redsand Flats",       x:10300, y:2900, r:1500, sub:"" },
-  { name:"Palmetto Bay",        x:8050,  y:3350, r:1250, sub:"inland sea" },
-  { name:"Evergrass Woods",     x:2700,  y:3700, r:1500, sub:"old forest" },
-  { name:"Sunhaven International", x:2500, y:6550, r:620, sub:"airport" },
-  { name:"Gator Marsh",         x:2450,  y:6100, r:750,  sub:"mind the mud" },
-  { name:"Port Salado",         x:6100,  y:7550, r:600,  sub:"working docks" },
-  { name:"Neon Mile",           x:8950,  y:6750, r:900,  sub:"beach strip" },
-  { name:"Vista Heights",       x:4250,  y:4900, r:600,  sub:"city overlook" },
-  { name:"Solano Foothills",    x:6200,  y:4350, r:850,  sub:"farm country" },
-  { name:"Northpoint",          x:6850,  y:1050, r:600,  sub:"fishing village" },
-  { name:"Lighthouse Point",    x:11250, y:4150, r:520,  sub:"sea cliffs" },
-  { name:"Sunset Keys",         x:2450,  y:7400, r:750,  sub:"island chain" },
-  { name:"Key Sur",             x:1050,  y:7700, r:450,  sub:"end of the road" },
-  { name:"Vice Bay",            x:(CITY.x0+CITY.x1)/2, y:(CITY.y0+CITY.y1)/2, r:0, rect:CITY, sub:"downtown" },
+  { name:"North Isle",  x:2450,  y:2050, r:1450, sub:"beaches & a campground" },
+  { name:"West Isle",   x:2200,  y:5000, r:1100, sub:"quiet pond" },
+  { name:"South Cay",   x:4550,  y:6550, r:680,  sub:"campground" },
+  { name:"Lake Shore",  x:7050,  y:2450, r:1150, sub:"the big lake" },
+  { name:"Airfield",    x:8150,  y:4590, r:720,  sub:"airstrip" },
+  { name:"East Reef",   x:10650, y:4350, r:900,  sub:"lighthouse" },
+  { name:"Downtown",    x:(CITY.x0+CITY.x1)/2, y:(CITY.y0+CITY.y1)/2, r:0, rect:CITY, sub:"the grid" },
 ];
 function zoneAt(x,y){
   for (const z of ZONES){
@@ -661,13 +574,9 @@ function blockedStatic(x, y, pad=16){
   return false;
 }
 
-/* ---- biome weights (drive terrain color + foliage type) ---- */
+/* ---- biome weights (flat, green world: light forest tint, no desert/swamp) ---- */
 function biomesAt(x,y){
-  return {
-    desert: gauss(x,y,10400,2400,1900,1600),
-    forest: gauss(x,y,2700,3700,1650,1850),
-    swamp:  gauss(x,y,2450,6100,950,650),
-  };
+  return { desert:0, forest:0.28, swamp:0 };
 }
 
 // --- foliage across the island: palms on sand, pines in the woods & hills,
@@ -798,7 +707,7 @@ for (let i=0;i<3;i++){
 }
 
 // --- delivery drop-zones: nearest to depot pays 5, +5 for each farther ---
-const dropZones = [ {x:4808,y:6155}, {x:2480,y:6420}, {x:10350,y:2150}, {x:6850,y:1200}, {x:1050,y:7560} ]
+const dropZones = [ {x:7300,y:4300}, {x:6350,y:2350}, {x:2520,y:2200}, {x:4520,y:6560}, {x:2200,y:5150} ]
   .map(d => ({ ...d, r:130, d2:(d.x-DEPOT.x)**2 + (d.y-DEPOT.y)**2 }))
   .sort((a,b) => a.d2 - b.d2)
   .map((d,i) => ({ x:d.x, y:d.y, r:d.r, id:"d"+i, value: COIN_VALUE*(i+1) }));
@@ -2559,37 +2468,35 @@ function renderChunk(cx,cy){
   }
   // static overlays that live inside this chunk
   g.save(); g.translate(-wx0,-wy0);
-  // city asphalt pad
+  // city asphalt pad (the central street grid)
   g.fillStyle="#26303c"; g.fillRect(CITY.x0-40, CITY.y0-40, (CITY.x1-CITY.x0)+80, (CITY.y1-CITY.y0)+80);
-  // farm crop rows (Solano Foothills)
-  g.fillStyle="rgba(122,96,52,0.55)";
-  for (let ry=4700; ry<5040; ry+=44) g.fillRect(5760, ry, 860, 20);
-  // ferris wheel at the end of the Neon Mile pier
-  (()=>{ const fx=9150, fy=7460;
-    g.strokeStyle="#d95d7e"; g.lineWidth=5; g.beginPath(); g.arc(fx,fy,64,0,7); g.stroke();
-    g.lineWidth=2.5;
-    for (let i=0;i<8;i++){ const a=i*Math.PI/4; g.beginPath(); g.moveTo(fx,fy); g.lineTo(fx+Math.cos(a)*64, fy+Math.sin(a)*64); g.stroke();
-      g.fillStyle=["#ffd23f","#4fd1c5","#ff8b5b","#9b59b6"][i%4]; g.beginPath(); g.arc(fx+Math.cos(a)*64, fy+Math.sin(a)*64, 7, 0, 7); g.fill(); }
-    g.fillStyle="#ffe9a8"; g.beginPath(); g.arc(fx,fy,8,0,7); g.fill();
+  // campground gravel lots + camper parking stalls
+  for (const c of CAMPS){
+    g.fillStyle="#8a8172"; roundRect(g, c.x, c.y, c.w, c.h, 12); g.fill();
+    g.strokeStyle="rgba(255,255,255,0.55)"; g.lineWidth=2;
+    const stalls=4, sw=(c.w-20)/stalls, sy=c.y+c.h-64;
+    g.beginPath();
+    for (let i=0;i<=stalls;i++){ g.moveTo(c.x+10+i*sw, sy); g.lineTo(c.x+10+i*sw, sy+56); }
+    g.moveTo(c.x+10, sy); g.lineTo(c.x+c.w-10, sy); g.stroke();
+  }
+  // 'TP' paved pull-off
+  g.fillStyle="#3a4350"; g.beginPath(); g.arc(TP.x, TP.y, 46, 0, 7); g.fill();
+  // a plane parked on the airstrip
+  (()=>{ const px=8250, py=4595;
+    g.save(); g.translate(px,py);
+    g.fillStyle="rgba(0,0,0,0.2)"; g.beginPath(); g.ellipse(2,3,40,12,0,0,7); g.fill();
+    g.fillStyle="#dfe3e8"; g.fillRect(-36,-6,72,12); g.fillRect(-8,-40,14,80); g.fillRect(-38,-14,8,28);
+    g.fillStyle="#4a5563"; g.beginPath(); g.arc(34,0,5,0,7); g.fill();
+    g.restore();
   })();
-  // boats riding at anchor (port + northpoint + keys)
-  for (const [bx,by,ba] of [[5850,7920,0.4],[6200,7960,-0.3],[7050,540,0.2],[2500,7150,0.9],[900,7960,-0.5],[9300,7420,0.6]]){
+  // a few boats moored by the piers
+  for (const [bx,by,ba] of [[4900,3106,0.1],[9520,4306,-0.1],[4550,7330,1.4]]){
     g.save(); g.translate(bx,by); g.rotate(ba);
     g.fillStyle="rgba(0,0,0,0.2)"; g.beginPath(); g.ellipse(2,3,26,10,0,0,7); g.fill();
     g.fillStyle="#e8e4da"; g.beginPath(); g.moveTo(26,0); g.quadraticCurveTo(10,-11,-20,-8); g.lineTo(-20,8); g.quadraticCurveTo(10,11,26,0); g.fill();
     g.fillStyle="#7d8ba0"; g.fillRect(-14,-4,16,8);
     g.restore();
   }
-  // a parked prop plane on the Sunhaven apron
-  (()=>{ const px=2480, py=6760;
-    g.save(); g.translate(px,py); g.rotate(-0.5);
-    g.fillStyle="rgba(0,0,0,0.2)"; g.beginPath(); g.ellipse(2,3,40,12,0,0,7); g.fill();
-    g.fillStyle="#dfe3e8"; g.fillRect(-36,-6,72,12);                    // fuselage
-    g.fillRect(-8,-40,14,80);                                           // wings
-    g.fillRect(-38,-14,8,28);                                           // tail
-    g.fillStyle="#4a5563"; g.beginPath(); g.arc(34,0,5,0,7); g.fill();  // nose
-    g.restore();
-  })();
   g.restore();
   return cv;
 }
@@ -2657,6 +2564,21 @@ function render(){
     ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke();
     ctx.strokeStyle = "rgba(255,214,120,0.5)"; ctx.lineWidth = 3; ctx.setLineDash([16,16]);
     ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = "butt";
+  }
+
+  // dirt paths (dashed trails)
+  for (const c of dirtPaths){
+    const midx=0.25*c.x0+0.5*c.cx+0.25*c.x1, midy=0.25*c.y0+0.5*c.cy+0.25*c.y1;
+    if (!vis(midx,midy, Math.abs(c.x1-c.x0)+Math.abs(c.y1-c.y0))) continue;
+    ctx.strokeStyle = "#a98b5f"; ctx.lineWidth = c.w; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke();
+    ctx.strokeStyle = "rgba(90,66,39,0.55)"; ctx.lineWidth = 3; ctx.setLineDash([4,14]);
+    ctx.beginPath(); ctx.moveTo(c.x0,c.y0); ctx.quadraticCurveTo(c.cx,c.cy,c.x1,c.y1); ctx.stroke(); ctx.setLineDash([]); ctx.lineCap = "butt";
+  }
+  // 'TP' marker
+  if (vis(TP.x, TP.y, 60)){
+    ctx.fillStyle="#cdd6e0"; ctx.font="700 22px system-ui"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText("TP", TP.x, TP.y);
   }
 
   // delivery drop-zones
