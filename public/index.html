@@ -477,6 +477,26 @@ roads.push({ x:6830-26, y:640, w:52, h:430, pier:true });      // Northpoint fis
 roads.push({ x:5700-30, y:7780, w:60, h:330, pier:true });     // Port Salado dock A
 roads.push({ x:6350-30, y:7780, w:60, h:330, pier:true });     // Port Salado dock B
 
+// ---- service stations: each sits on its OWN frontage road, entered by an off-ramp and
+//      left by an on-ramp — never on the main road itself ----
+const SERVICE = [];
+const STATION_R = 74, CHARGER_R = 74, LOT_HW = 150;
+function addServiceH(mx, roadY, side){   // main road runs horizontally at y=roadY; lot sits on `side` (+1 south / -1 north)
+  const D = 158, FH = 150, ly = roadY + side*D;
+  roads.push({ x: mx-FH, y: ly-38, w: FH*2, h: 76 });                                              // frontage (fuel + charge pads sit here)
+  roadCurves.push({ x0: mx-FH-90, y0: roadY, cx: mx-FH-14, cy: ly, x1: mx-FH+24, y1: ly, w: 58 }); // off-ramp in
+  roadCurves.push({ x0: mx+FH-24, y0: ly, cx: mx+FH+14, cy: ly, x1: mx+FH+90, y1: roadY, w: 58 }); // on-ramp out
+  const martY = ly + side*98;                                                                       // mart on the far side of the lot from the road
+  SERVICE.push({ x: mx, y: ly, mart: { x: mx-58, y: martY-32, w: 116, h: 64 } });
+}
+addServiceH(4084,  5450, -1);   // north-west of downtown
+addServiceH(6000,  5450, -1);   // north-east of downtown
+addServiceH(5200,  6860, +1);   // south of downtown (toward the port)
+addServiceH(6300,  6860, +1);   // south-east of downtown
+addServiceH(10350, 2260, +1);   // Dusthaven desert strip
+const stations = SERVICE.map(s => ({ x: s.x - 74, y: s.y }));   // fuel pad (left of lot)
+const chargers = SERVICE.map(s => ({ x: s.x + 74, y: s.y }));   // charge pad (right of lot)
+
 function overlapsStraightRoad(x, y, w, h, m=14){
   for (const r of roads){
     if (x < r.x+r.w+m && x+w > r.x-m && y < r.y+r.h+m && y+h > r.y-m) return true;
@@ -570,7 +590,7 @@ buildings.push({ x:1000, y:7640, w:110, h:70, color:"#c98a4a", roof:true, barn:t
 (() => {
   const near=(b,px,py,m)=>{ const cx=clamp(px,b.x,b.x+b.w), cy=clamp(py,b.y,b.y+b.h); return (px-cx)**2+(py-cy)**2 < m*m; };
   for (let i=buildings.length-1;i>=0;i--){
-    const b=buildings[i]; let hit=overlapsStraightRoad(b.x, b.y, b.w, b.h, -6);
+    const b=buildings[i]; let hit=overlapsStraightRoad(b.x, b.y, b.w, b.h, 3);
     for (const c of roadCurves){ if (hit) break;
       for (let t=0;t<=1.0001;t+=0.04){ const u=1-t, px=u*u*c.x0+2*u*t*c.cx+t*t*c.x1, py=u*u*c.y0+2*u*t*c.cy+t*t*c.y1;
         if (near(b,px,py,c.w/2+22)){ hit=true; break; } }
@@ -578,20 +598,6 @@ buildings.push({ x:1000, y:7640, w:110, h:70, color:"#c98a4a", roof:true, barn:t
     if (hit) buildings.splice(i,1);
   }
 })();
-
-// --- service stations: a fuel pad + a charge pad side-by-side, just off the road, each with a mini-mart ---
-const SERVICE = [
-  { x:4320,  y:6150 },   // Vice Bay (downtown)
-  { x:8900,  y:6500 },   // Neon Mile
-  { x:10550, y:2450 },   // Dusthaven (desert)
-  { x:6850,  y:4550 },   // Solano Foothills
-  { x:6350,  y:7420 },   // Port Salado
-  { x:3000,  y:6750 },   // Sunhaven (by the airport)
-];
-const STATION_R = 74, CHARGER_R = 74, LOT_HW = 150;
-const stations = SERVICE.map(s => ({ x: s.x - 74, y: s.y }));   // fuel pad — left half of the lot
-const chargers = SERVICE.map(s => ({ x: s.x + 74, y: s.y }));   // charge pad — right half of the lot
-const marts    = SERVICE.map(s => ({ x: s.x - 58, y: s.y - 150, w: 116, h: 70 }));
 
 // keep stations, chargers, spawn, and depot clear of buildings
 const SPAWN = { x: 3700, y: 6860 };
@@ -685,6 +691,14 @@ function biomesAt(x,y){
     placed++;
   }
 })();
+
+// HARD RULE — nothing sits in a road: final pass strips any tree (incl. park & POI trees)
+// whose canopy touches ANY road, straight or curved.
+for (let i=trees.length-1;i>=0;i--){
+  const t=trees[i], r=t.r+4, d=r*0.71;
+  if (onRoadAt(t.x,t.y) || onRoadAt(t.x+r,t.y) || onRoadAt(t.x-r,t.y) || onRoadAt(t.x,t.y+r) || onRoadAt(t.x,t.y-r)
+      || onRoadAt(t.x+d,t.y+d) || onRoadAt(t.x-d,t.y-d) || onRoadAt(t.x+d,t.y-d) || onRoadAt(t.x-d,t.y+d)) trees.splice(i,1);
+}
 
 // --- coins (each worth 5) ---
 const COIN_VALUE = 5;
@@ -2599,8 +2613,8 @@ function render(){
     // pull-in glow under each pad (matches the fill zones the player drives into)
     ctx.fillStyle = "rgba(255,176,58,0.13)"; ctx.beginPath(); ctx.arc(fx, sv.y, STATION_R, 0, 7); ctx.fill();
     ctx.fillStyle = "rgba(79,209,197,0.13)"; ctx.beginPath(); ctx.arc(cx, sv.y, CHARGER_R, 0, 7); ctx.fill();
-    // mini-mart (set back from the pumps)
-    const m = marts[SERVICE.indexOf(sv)];
+    // mini-mart (set back from the pumps, on the far side of the lot from the road)
+    const m = sv.mart;
     ctx.fillStyle = "rgba(0,0,0,0.30)"; roundRect(ctx, m.x+4, m.y+6, m.w, m.h, 6); ctx.fill();
     ctx.fillStyle = "#6b7482"; roundRect(ctx, m.x, m.y, m.w, m.h, 6); ctx.fill();
     ctx.fillStyle = "#8aa0c8"; roundRect(ctx, m.x+10, m.y+m.h-22, m.w-20, 16, 3); ctx.fill();   // window strip
