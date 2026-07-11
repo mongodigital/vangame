@@ -942,15 +942,17 @@ function drawTwoWheeler(ctx, config){
   ctx.fillStyle="#59606a"; ctx.beginPath(); ctx.arc(3,0,4,0,7); ctx.fill();
   if (kind!=="bicycle"){ ctx.fillStyle="#fff4bf"; ctx.beginPath(); ctx.arc(L/2-3,0,2.6,0,7); ctx.fill(); }   // headlight
 }
-// --- higher-fidelity Long cargo van (front = +x) ---
-function drawLongVan(ctx, config){
-  const L = 78, W = 30, hw = W/2;
+// --- higher-fidelity box vans (Short / Long / Bus); front = +x ---
+function drawBoxVan(ctx, config){
+  const L = vanLength(config), W = 30, hw = W/2;
+  const isBus = config && config.length === "bus";
   const color = (config && config.color) || "#e84b3c";
   const dark = shade(color,-0.42), darker = shade(color,-0.62), light = shade(color,0.18);
   const glass = "rgba(190,226,255,0.96)", glassDim = "rgba(150,198,238,0.75)";
   const dualy = config && config.rearTires === "dualy";
-  const rearX = -18, frontX = 24;
+  const rearX = -L/2 + 16, frontX = L/2 - 16;
   const TL = 18, TW = 8;                          // tyre size — front & rear share the SAME width (TW)
+  const wsFront = L/2 - 6, wsBack = L/2 - 13, cabBack = L/2 - 26;   // windshield strip + cab/box divider
 
   ctx.fillStyle = "rgba(0,0,0,0.20)"; roundRect(ctx, -L/2+2, -hw+3, L, W, 10); ctx.fill();   // ground shadow
 
@@ -967,19 +969,32 @@ function drawLongVan(ctx, config){
   ctx.fillStyle = color; ctx.strokeStyle = darker; ctx.lineWidth = 2;
   roundRect(ctx, -L/2, -hw, L, W, 9); ctx.fill(); ctx.stroke();
 
-  // ---- roof sheen (cylindrical light/shadow down the length) + cargo rib seams ----
+  // ---- roof sheen (cylindrical light/shadow down the length) ----
   ctx.fillStyle = light; roundRect(ctx, -L/2+5, -hw+4, L-12, 8, 4); ctx.fill();
   ctx.fillStyle = dark;  roundRect(ctx, -L/2+5,  hw-8, L-12, 4, 3); ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.12)"; ctx.lineWidth = 1.3;
-  for (let rx=-L/2+16; rx<=8; rx+=12){ ctx.beginPath(); ctx.moveTo(rx,-hw+4); ctx.lineTo(rx,hw-4); ctx.stroke(); }
+
+  // ---- cargo detail: passenger windows (bus) or rib seams (vans) ----
+  if (isBus){
+    const wx0 = -L/2+15, wspan = cabBack - wx0;
+    ctx.fillStyle = glassDim;
+    roundRect(ctx, wx0, -hw+4, wspan, 4, 2); ctx.fill();
+    roundRect(ctx, wx0,  hw-8, wspan, 4, 2); ctx.fill();
+    ctx.fillStyle = darker; const n = Math.max(4, Math.round(wspan/13));
+    for (let i=1;i<n;i++){ const mx = wx0 + wspan*i/n; ctx.fillRect(mx-0.7,-hw+4,1.4,4); ctx.fillRect(mx-0.7,hw-8,1.4,4); }
+  } else {
+    ctx.strokeStyle = "rgba(0,0,0,0.12)"; ctx.lineWidth = 1.3;
+    for (let rx=-L/2+16; rx<=cabBack-5; rx+=13){ ctx.beginPath(); ctx.moveTo(rx,-hw+4); ctx.lineTo(rx,hw-4); ctx.stroke(); }
+  }
 
   // ---- cab: roof panel, windshield, side windows ----
-  ctx.fillStyle = light; roundRect(ctx, 14, -hw+5, 16, W-10, 5); ctx.fill();
+  ctx.fillStyle = light; roundRect(ctx, cabBack, -hw+5, wsBack-cabBack, W-10, 5); ctx.fill();
   ctx.fillStyle = glass;
-  ctx.beginPath(); ctx.moveTo(28,-hw+5); ctx.lineTo(33,-hw+8); ctx.lineTo(33,hw-8); ctx.lineTo(28,hw-5); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = glassDim;
-  roundRect(ctx, 17,-hw+4, 10, 4, 1.5); ctx.fill();
-  roundRect(ctx, 17, hw-8, 10, 4, 1.5); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(wsBack,-hw+5); ctx.lineTo(wsFront,-hw+8); ctx.lineTo(wsFront,hw-8); ctx.lineTo(wsBack,hw-5); ctx.closePath(); ctx.fill();
+  if (!isBus){
+    ctx.fillStyle = glassDim;
+    roundRect(ctx, cabBack+2,-hw+4, wsBack-cabBack-3, 4, 1.5); ctx.fill();
+    roundRect(ctx, cabBack+2, hw-8, wsBack-cabBack-3, 4, 1.5); ctx.fill();
+  }
 
   // ---- fender flares over the wheels (body panel that covers the tyres; wide over the duals) ----
   ctx.fillStyle = dark;
@@ -989,11 +1004,14 @@ function drawLongVan(ctx, config){
 
   // ---- panel seams + door handles ----
   ctx.strokeStyle = "rgba(0,0,0,0.18)"; ctx.lineWidth = 1.2;
-  for (const sx of [13, -8, -L/2+5]){ ctx.beginPath(); ctx.moveTo(sx,-hw+3); ctx.lineTo(sx,hw-3); ctx.stroke(); }
-  ctx.fillStyle = "rgba(0,0,0,0.3)"; roundRect(ctx,-2,-hw+6,4,1.6,1); ctx.fill(); roundRect(ctx,-2,hw-7,4,1.6,1); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cabBack,-hw+3); ctx.lineTo(cabBack,hw-3); ctx.stroke();          // cab / box divider
+  if (!isBus){
+    ctx.beginPath(); ctx.moveTo(-L/2+5,-hw+3); ctx.lineTo(-L/2+5,hw-3); ctx.stroke();           // rear-door seam
+    ctx.fillStyle = "rgba(0,0,0,0.3)"; roundRect(ctx, cabBack-16,-hw+6,4,1.6,1); ctx.fill(); roundRect(ctx, cabBack-16,hw-7,4,1.6,1); ctx.fill();
+  }
 
   // ---- mirrors ----
-  ctx.fillStyle = dark; roundRect(ctx, 29,-hw-3, 5, 3, 1); ctx.fill(); roundRect(ctx, 29, hw, 5, 3, 1); ctx.fill();
+  ctx.fillStyle = dark; roundRect(ctx, wsBack-1,-hw-3, 5, 3, 1); ctx.fill(); roundRect(ctx, wsBack-1, hw, 5, 3, 1); ctx.fill();
 
   // ---- nose: grille, bumper, headlights ----
   ctx.fillStyle = darker; roundRect(ctx, L/2-4, -hw+3, 4, W-6, 2); ctx.fill();
@@ -1025,47 +1043,7 @@ function drawLongVan(ctx, config){
 function drawVan(ctx, config){
   if (isWalker(config)){ drawWalker(ctx, config); return; }
   if (isTwoWheeler(config)){ drawTwoWheeler(ctx, config); return; }
-  if (config && config.length === "long"){ drawLongVan(ctx, config); return; }
-  const L = vanLength(config), W = 30;
-  const color = (config && config.color) || "#e84b3c";
-  const dark  = shade(color,-0.4), light = shade(color,0.16);
-  ctx.fillStyle = "rgba(0,0,0,0.20)"; roundRect(ctx, -L/2+2, -W/2+3, L, W, 9); ctx.fill();
-  ctx.fillStyle = "#141414";
-  const rearX = -L/2 + 15, frontX = L/2 - 15;
-  if (config && config.rearTires === "dualy"){
-    for (const s of [-1,1]){ wheel(ctx, rearX, s*(W/2+1), 16, 6); wheel(ctx, rearX, s*(W/2+7), 16, 6); }
-  } else { for (const s of [-1,1]) wheel(ctx, rearX, s*(W/2+2.5), 19, 10); }
-  for (const s of [-1,1]) wheel(ctx, frontX, s*(W/2+1), 13, 6);
-  ctx.fillStyle = color; ctx.strokeStyle = dark; ctx.lineWidth = 2;
-  roundRect(ctx, -L/2, -W/2, L, W, 9); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = light; roundRect(ctx, -L/2+7, -W/2+5, L-16, W-10, 6); ctx.fill();
-  ctx.fillStyle = "rgba(186,227,255,0.95)"; roundRect(ctx, L/2-16, -W/2+5, 10, W-10, 3); ctx.fill();
-  ctx.fillStyle = "rgba(186,227,255,0.45)"; roundRect(ctx, -L/2+7, -W/2+6, 6, W-12, 3); ctx.fill();
-  if (config && config.length === "bus"){   // row of side windows
-    ctx.fillStyle = "rgba(186,227,255,0.85)";
-    roundRect(ctx, -L/2+15, -W/2+3, L-32, 4, 2); ctx.fill();
-    roundRect(ctx, -L/2+15, W/2-7, L-32, 4, 2); ctx.fill();
-    ctx.fillStyle = dark;
-    const n=6; for (let i=1;i<n;i++){ const mx=-L/2+15 + (L-32)*i/n; ctx.fillRect(mx-0.75, -W/2+3, 1.5, 4); ctx.fillRect(mx-0.75, W/2-7, 1.5, 4); }
-  }
-  ctx.fillStyle = "#fff4bf";
-  ctx.beginPath(); ctx.arc(L/2-2,-W/2+5,2.4,0,7); ctx.fill();
-  ctx.beginPath(); ctx.arc(L/2-2, W/2-5,2.4,0,7); ctx.fill();
-  if (config && config.extra === "spare"){
-    ctx.fillStyle = "#111"; ctx.beginPath(); ctx.arc(-L/2-5,0,9,0,7); ctx.fill();
-    ctx.fillStyle = "#4d4d4d"; ctx.beginPath(); ctx.arc(-L/2-5,0,3.6,0,7); ctx.fill();
-  } else if (config && config.extra === "fuel"){
-    ctx.fillStyle = "#c0392b"; roundRect(ctx,-L/2-12,-7,12,14,2); ctx.fill();
-    ctx.fillStyle = "#7d2519"; ctx.fillRect(-L/2-9,-9,4,3);
-  }
-  // roof accessories (sit on the roof, drawn last / on top)
-  const roof = config && config.roof;
-  if (roof && roof.length){
-    const pos = roofSlotPositions(config), n = roofSlots(config);
-    const aw = Math.min(((L-38)/n)*0.86, 24), ah = 18;
-    for (let i=0;i<pos.length;i++){ const id = roof[i]; if (!id || id==="none") continue;
-      ctx.save(); ctx.translate(pos[i], 0); drawAccessory(ctx, id, aw, ah); ctx.restore(); }
-  }
+  drawBoxVan(ctx, config);   // Short, Long, Bus
 }
 function maxFuelFor(config){
   if (isMoto(config)) return 25 + (config.extra === "fuel" ? 10 : 0);   // 25-unit tank + optional 10-unit rear can
