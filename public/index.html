@@ -481,21 +481,30 @@ roads.push({ x:6350-30, y:7780, w:60, h:330, pier:true });     // Port Salado do
 //      left by an on-ramp — never on the main road itself ----
 const SERVICE = [];
 const STATION_R = 74, CHARGER_R = 74, LOT_HW = 150;
-function addServiceH(mx, roadY, side){   // main road runs horizontally at y=roadY; lot sits on `side` (+1 south / -1 north)
+function addServiceH(mx, roadY, side){   // horizontal main road at y=roadY; lot on `side` (+1 south / -1 north), pads side-by-side
   const D = 158, FH = 150, ly = roadY + side*D;
-  roads.push({ x: mx-FH, y: ly-38, w: FH*2, h: 76 });                                              // frontage (fuel + charge pads sit here)
+  roads.push({ x: mx-FH, y: ly-38, w: FH*2, h: 76 });                                              // frontage road (pads sit on it)
   roadCurves.push({ x0: mx-FH-90, y0: roadY, cx: mx-FH-14, cy: ly, x1: mx-FH+24, y1: ly, w: 58 }); // off-ramp in
   roadCurves.push({ x0: mx+FH-24, y0: ly, cx: mx+FH+14, cy: ly, x1: mx+FH+90, y1: roadY, w: 58 }); // on-ramp out
-  const martY = ly + side*98;                                                                       // mart on the far side of the lot from the road
-  SERVICE.push({ x: mx, y: ly, mart: { x: mx-58, y: martY-32, w: 116, h: 64 } });
+  const martY = ly + side*98;
+  SERVICE.push({ lx:mx, ly, orient:'h', fuel:{ x:mx-74, y:ly }, charge:{ x:mx+74, y:ly }, mart:{ x:mx-58, y:martY-32, w:116, h:64 } });
 }
-addServiceH(4084,  5450, -1);   // north-west of downtown
-addServiceH(6000,  5450, -1);   // north-east of downtown
-addServiceH(5200,  6860, +1);   // south of downtown (toward the port)
-addServiceH(6300,  6860, +1);   // south-east of downtown
-addServiceH(10350, 2260, +1);   // Dusthaven desert strip
-const stations = SERVICE.map(s => ({ x: s.x - 74, y: s.y }));   // fuel pad (left of lot)
-const chargers = SERVICE.map(s => ({ x: s.x + 74, y: s.y }));   // charge pad (right of lot)
+function addServiceV(my, roadX, side){   // vertical main road at x=roadX; lot on `side` (+1 east / -1 west), pads stacked
+  const D = 158, FH = 150, lx = roadX + side*D;
+  roads.push({ x: lx-38, y: my-FH, w: 76, h: FH*2 });                                              // frontage road (pads sit on it)
+  roadCurves.push({ x0: roadX, y0: my-FH-90, cx: lx, cy: my-FH-14, x1: lx, y1: my-FH+24, w: 58 }); // off-ramp in
+  roadCurves.push({ x0: lx, y0: my+FH-24, cx: lx, cy: my+FH+14, x1: roadX, y1: my+FH+90, w: 58 }); // on-ramp out
+  const martX = lx + side*98;
+  SERVICE.push({ lx, ly:my, orient:'v', fuel:{ x:lx, y:my-74 }, charge:{ x:lx, y:my+74 }, mart:{ x:martX-32, y:my-58, w:64, h:116 } });
+}
+// spread around the island so there's a fill-up option whichever way you head
+addServiceH(4568,  5450, -1);   // NORTH of downtown
+addServiceH(5600,  6860, +1);   // SOUTH of downtown (toward the port)
+addServiceV(6150,  3600, -1);   // WEST of downtown
+addServiceV(6150,  6988, +1);   // EAST of downtown
+addServiceH(10600, 2260, +1);   // Dusthaven desert strip (clear of the cross-street)
+const stations = SERVICE.map(s => s.fuel);    // fuel pads
+const chargers = SERVICE.map(s => s.charge);  // charge pads
 
 function overlapsStraightRoad(x, y, w, h, m=14){
   for (const r of roads){
@@ -2602,36 +2611,33 @@ function render(){
     ctx.fillText("DROP +"+z.value, z.x, z.y+1);
   }
 
-  // service stations — a fuel side and a charge side sharing one paved lot, with a mini-mart
+  // service stations — a fuel pad + a charge pad on a shared paved lot with a mini-mart,
+  // laid out along whichever way the frontage road runs (horizontal or vertical)
   ctx.textAlign="center"; ctx.textBaseline="middle";
+  const drawPad = (p, canopy, pump, accent, emoji, label, labelCol) => {
+    ctx.fillStyle = accent.replace(")", ",0.13)").replace("rgb","rgba");
+    ctx.beginPath(); ctx.arc(p.x, p.y, STATION_R, 0, 7); ctx.fill();
+    ctx.fillStyle = canopy; roundRect(ctx, p.x-50, p.y-34, 100, 16, 4); ctx.fill();               // canopy roof
+    ctx.fillStyle = pump;   roundRect(ctx, p.x-20, p.y-12, 14, 32, 3); ctx.fill(); roundRect(ctx, p.x+6, p.y-12, 14, 32, 3); ctx.fill();
+    ctx.fillStyle = accent; roundRect(ctx, p.x-17, p.y-6, 8, 12, 2); ctx.fill(); roundRect(ctx, p.x+9, p.y-6, 8, 12, 2); ctx.fill();
+    ctx.font = "bold 19px system-ui"; ctx.fillStyle = accent; ctx.fillText(emoji, p.x, p.y+36);
+    ctx.fillStyle = labelCol; ctx.font = "700 10px system-ui"; ctx.fillText(label, p.x, p.y+50);
+  };
   for (const sv of SERVICE){
-    if (!vis(sv.x, sv.y, LOT_HW+40)) continue;
-    const fx = sv.x-74, cx = sv.x+74;                 // fuel pad / charge pad centres
-    // paved lot
-    ctx.fillStyle = "#333a42"; roundRect(ctx, sv.x-LOT_HW, sv.y-42, LOT_HW*2, 100, 12); ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 2; roundRect(ctx, sv.x-LOT_HW, sv.y-42, LOT_HW*2, 100, 12); ctx.stroke();
-    // pull-in glow under each pad (matches the fill zones the player drives into)
-    ctx.fillStyle = "rgba(255,176,58,0.13)"; ctx.beginPath(); ctx.arc(fx, sv.y, STATION_R, 0, 7); ctx.fill();
-    ctx.fillStyle = "rgba(79,209,197,0.13)"; ctx.beginPath(); ctx.arc(cx, sv.y, CHARGER_R, 0, 7); ctx.fill();
-    // mini-mart (set back from the pumps, on the far side of the lot from the road)
+    if (!vis(sv.lx, sv.ly, LOT_HW+50)) continue;
+    // paved lot (follows the frontage orientation)
+    const lw = sv.orient==='h' ? LOT_HW*2 : 100, lh = sv.orient==='h' ? 100 : LOT_HW*2;
+    ctx.fillStyle = "#333a42"; roundRect(ctx, sv.lx-lw/2, sv.ly-lh/2, lw, lh, 12); ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.06)"; ctx.lineWidth = 2; roundRect(ctx, sv.lx-lw/2, sv.ly-lh/2, lw, lh, 12); ctx.stroke();
+    // mini-mart (far side of the lot from the road)
     const m = sv.mart;
     ctx.fillStyle = "rgba(0,0,0,0.30)"; roundRect(ctx, m.x+4, m.y+6, m.w, m.h, 6); ctx.fill();
     ctx.fillStyle = "#6b7482"; roundRect(ctx, m.x, m.y, m.w, m.h, 6); ctx.fill();
-    ctx.fillStyle = "#8aa0c8"; roundRect(ctx, m.x+10, m.y+m.h-22, m.w-20, 16, 3); ctx.fill();   // window strip
-    ctx.fillStyle = "#e94f4f"; roundRect(ctx, m.x, m.y-8, m.w, 14, 3); ctx.fill();               // sign band
-    ctx.fillStyle = "#fff"; ctx.font = "700 12px system-ui"; ctx.fillText("MART", sv.x, m.y-1);
-    // fuel side: red canopy over two pumps
-    ctx.fillStyle = "#c0392b"; roundRect(ctx, fx-50, sv.y-34, 100, 16, 4); ctx.fill();
-    ctx.fillStyle = "#2b3440"; roundRect(ctx, fx-20, sv.y-12, 14, 34, 3); ctx.fill(); roundRect(ctx, fx+6, sv.y-12, 14, 34, 3); ctx.fill();
-    ctx.fillStyle = "#ffb03a"; roundRect(ctx, fx-17, sv.y-6, 8, 12, 2); ctx.fill(); roundRect(ctx, fx+9, sv.y-6, 8, 12, 2); ctx.fill();
-    ctx.font = "bold 20px system-ui"; ctx.fillText("⛽", fx, sv.y+38);
-    ctx.fillStyle = "#ffd98a"; ctx.font = "700 10px system-ui"; ctx.fillText("FUEL", fx, sv.y+52);
-    // charge side: teal canopy over two stalls
-    ctx.fillStyle = "#1c8577"; roundRect(ctx, cx-50, sv.y-34, 100, 16, 4); ctx.fill();
-    ctx.fillStyle = "#233b3a"; roundRect(ctx, cx-20, sv.y-12, 14, 34, 3); ctx.fill(); roundRect(ctx, cx+6, sv.y-12, 14, 34, 3); ctx.fill();
-    ctx.fillStyle = "#4fd1c5"; roundRect(ctx, cx-17, sv.y-6, 8, 12, 2); ctx.fill(); roundRect(ctx, cx+9, sv.y-6, 8, 12, 2); ctx.fill();
-    ctx.font = "bold 18px system-ui"; ctx.fillText("⚡", cx, sv.y+38);
-    ctx.fillStyle = "#9ff0e6"; ctx.font = "700 10px system-ui"; ctx.fillText("CHARGE", cx, sv.y+52);
+    ctx.fillStyle = "#8aa0c8"; roundRect(ctx, m.x+10, m.y+m.h-22, m.w-20, 16, 3); ctx.fill();
+    ctx.fillStyle = "#e94f4f"; roundRect(ctx, m.x, m.y-8, m.w, 14, 3); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = "700 12px system-ui"; ctx.fillText("MART", m.x+m.w/2, m.y-1);
+    drawPad(sv.fuel,   "#c0392b", "#2b3440", "rgb(255,176,58)",  "⛽", "FUEL",   "#ffd98a");
+    drawPad(sv.charge, "#1c8577", "#233b3a", "rgb(79,209,197)",  "⚡", "CHARGE", "#9ff0e6");
   }
 
   // buildings
