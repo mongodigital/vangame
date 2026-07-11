@@ -426,16 +426,29 @@ roads.push({ x:4524, y:6980, w:52, h:300, pier:true });        // south-island p
 // ---- airstrip (A): tarmac runway on the central island, SE of the grid ----
 roads.push({ x:7650, y:4520, w:1040, h:150, tarmac:true });
 
-// ---- marts (M): fuel + charge + a little store, built beside the road ----
+// ---- marts (M): fuel + charge + a store, on their OWN frontage lot reached by an
+//      off-ramp and left by an on-ramp — exactly as they looked before the map change ----
 const SERVICE = [];
 const STATION_R = 74, CHARGER_R = 74, LOT_HW = 150;
-function addMart(x, y, orient){
-  if (orient === 'v') SERVICE.push({ lx:x, ly:y, orient:'v', fuel:{ x, y:y-74 }, charge:{ x, y:y+74 }, mart:{ x:x+34, y:y-58, w:64, h:116 } });
-  else                SERVICE.push({ lx:x, ly:y, orient:'h', fuel:{ x:x-74, y }, charge:{ x:x+74, y }, mart:{ x:x-58, y:y-150, w:116, h:64 } });
+function addServiceH(mx, roadY, side){   // horizontal road at y=roadY; lot on `side` (+1 south / -1 north), pads side-by-side
+  const D = 158, FH = 150, ly = roadY + side*D;
+  roads.push({ x: mx-FH, y: ly-38, w: FH*2, h: 76 });                                              // frontage road (pads sit on it)
+  roadCurves.push({ x0: mx-FH-90, y0: roadY, cx: mx-FH-14, cy: ly, x1: mx-FH+24, y1: ly, w: 58 }); // off-ramp in
+  roadCurves.push({ x0: mx+FH-24, y0: ly, cx: mx+FH+14, cy: ly, x1: mx+FH+90, y1: roadY, w: 58 }); // on-ramp out
+  const martY = ly + side*98;
+  SERVICE.push({ lx:mx, ly, orient:'h', fuel:{ x:mx-74, y:ly }, charge:{ x:mx+74, y:ly }, mart:{ x:mx-58, y:martY-32, w:116, h:64 } });
 }
-addMart(2560, 1800, 'h');   // NW island mart
-addMart(7000, 3720, 'h');   // central island — main mart (south of the lake)
-addMart(7900, 5240, 'h');   // central island — south mart
+function addServiceV(my, roadX, side){   // vertical road at x=roadX; lot on `side` (+1 east / -1 west), pads stacked
+  const D = 158, FH = 150, lx = roadX + side*D;
+  roads.push({ x: lx-38, y: my-FH, w: 76, h: FH*2 });                                              // frontage road (pads sit on it)
+  roadCurves.push({ x0: roadX, y0: my-FH-90, cx: lx, cy: my-FH-14, x1: lx, y1: my-FH+24, w: 58 }); // off-ramp in
+  roadCurves.push({ x0: lx, y0: my+FH-24, cx: lx, cy: my+FH+14, x1: roadX, y1: my+FH+90, w: 58 }); // on-ramp out
+  const martX = lx + side*98;
+  SERVICE.push({ lx, ly:my, orient:'v', fuel:{ x:lx, y:my-74 }, charge:{ x:lx, y:my+74 }, mart:{ x:martX-32, y:my-58, w:64, h:116 } });
+}
+addServiceV(1980, 2560, +1);   // NW island mart — off the island spine
+addServiceH(7000, 3720, +1);   // central island — main mart (south of the lake)
+addServiceH(7900, 5240, +1);   // central island — south mart
 const stations = SERVICE.map(s => s.fuel);    // fuel pads
 const chargers = SERVICE.map(s => s.charge);  // charge pads
 
