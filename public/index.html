@@ -347,8 +347,7 @@ const ISLANDS = [
   { cx:10650, cy:4350, rx:320,  ry:1500, seed:9 },   // east sliver
 ];
 const LAKES = [
-  { cx:7050, cy:2450, rx:520, ry:980, seed:3 },      // central lake
-  { cx:2200, cy:4620, rx:300, ry:340, seed:7 },      // SW island pond
+  { cx:7050, cy:2450, rx:520, ry:980, seed:3 },      // central lake (the only inland water)
 ];
 function blobBase(x,y,b){                            // 0 = ocean … 1 = deep inland
   const nx=(x-b.cx)/b.rx, ny=(y-b.cy)/b.ry, ang=Math.atan2(ny,nx);
@@ -406,16 +405,19 @@ roadCurves.push({ x0:6500, y0:3660, cx:7020, cy:3720, x1:7300, y1:3980, w:64 });
 roadCurves.push({ x0:7300, y0:4760, cx:7520, cy:5060, x1:7940, y1:5240, w:60 });               // grid → south mart
 roadCurves.push({ x0:7950, y0:4370, cx:8300, cy:4440, x1:8560, y1:4560, w:56 });               // grid → airstrip
 
-// ---- SW island: the bridge road forks around the pond ----
-roadCurves.push({ x0:2250, y0:4090, cx:2000, cy:4420, x1:1970, y1:4760, w:54 });               // west fork
-roadCurves.push({ x0:2250, y0:4090, cx:2500, cy:4420, x1:2480, y1:4800, w:54 });               // east fork
+// ---- SW island: the bridge road runs into a circular loop road (roundabout) ----
+roadCurves.push({ x0:2250, y0:4090, cx:2210, cy:4180, x1:2200, y1:4270, w:54 });               // bridge → ring top
+roadCurves.push({ x0:2200, y0:4270, cx:2530, cy:4270, x1:2530, y1:4600, w:54 });               // ring: top-right arc
+roadCurves.push({ x0:2530, y0:4600, cx:2530, cy:4930, x1:2200, y1:4930, w:54 });               // ring: bottom-right arc
+roadCurves.push({ x0:2200, y0:4930, cx:1870, cy:4930, x1:1870, y1:4600, w:54 });               // ring: bottom-left arc
+roadCurves.push({ x0:1870, y0:4600, cx:1870, cy:4270, x1:2200, y1:4270, w:54 });               // ring: top-left arc
 
 // ---- dirt paths (dashed trails) ----
 dirtPaths.push({ x0:2480, y0:1500, cx:2560, cy:1780, x1:2470, y1:2180, w:26 });                // NW island camp trail
 dirtPaths.push({ x0:6350, y0:2650, cx:6480, cy:1650, x1:7050, y1:1330, w:26 });                // lakeshore loop (west + north)
 dirtPaths.push({ x0:7050, y0:1330, cx:7720, cy:1750, x1:7660, y1:2760, w:26 });                // lakeshore loop (north + east)
 dirtPaths.push({ x0:5920, y0:2860, cx:6020, cy:3480, x1:5950, y1:4150, w:26 });                // west-peninsula trail (to TP/beach)
-dirtPaths.push({ x0:1970, y0:4760, cx:2080, cy:5240, x1:2380, y1:5680, w:24 });                // SW island south trail
+dirtPaths.push({ x0:2200, y0:4930, cx:2150, cy:5350, x1:2380, y1:5720, w:24 });                // SW island south trail (from the ring)
 
 // ---- piers (wooden, drivable, reach into water) ----
 roads.push({ x:7074, y:2950, w:54, h:640, pier:true });        // central LAKE pier
